@@ -345,12 +345,31 @@ const drawFrame = (videoFrame: VideoFrame, index: number) => {
 const drawSoftwareFrame = (pixels: Uint8Array, width: number, height: number, index: number) => {
   const canvas = fallbackCanvasRef.value
   if (!canvas || width < 1 || height < 1 || pixels.length !== width * height * 4) return
+  // IPC already gave us an owned byte buffer. Reinterpret it as clamped RGBA
+  // instead of copying the complete frame before handing it to ImageData.
+  const rgba = pixels.buffer instanceof ArrayBuffer
+    ? new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength)
+    : new Uint8ClampedArray(pixels)
+  const image = new ImageData(rgba, width, height)
+  const normalizedRotation = ((rotation.value % 360) + 360) % 360
+  if (cropRatio.value === 'no' && normalizedRotation === 0) {
+    if (canvas.width !== width) canvas.width = width
+    if (canvas.height !== height) canvas.height = height
+    fallbackContext = fallbackContext || canvas.getContext('2d', { alpha: false })
+    if (!fallbackContext) return
+    fallbackContext.putImageData(image, 0, 0)
+    renderMode.value = 'fallback'
+    frameCount.value = index + 1
+    loading.value = false
+    errorText.value = ''
+    return
+  }
   softwareSourceCanvas = softwareSourceCanvas || document.createElement('canvas')
   if (softwareSourceCanvas.width !== width) softwareSourceCanvas.width = width
   if (softwareSourceCanvas.height !== height) softwareSourceCanvas.height = height
   softwareSourceContext = softwareSourceContext || softwareSourceCanvas.getContext('2d', { alpha: false })
   if (!softwareSourceContext) return
-  softwareSourceContext.putImageData(new ImageData(new Uint8ClampedArray(pixels), width, height), 0, 0)
+  softwareSourceContext.putImageData(image, 0, 0)
 
   let sourceX = 0
   let sourceY = 0
@@ -368,7 +387,6 @@ const drawSoftwareFrame = (pixels: Uint8Array, width: number, height: number, in
     }
   }
 
-  const normalizedRotation = ((rotation.value % 360) + 360) % 360
   const swapsAxes = normalizedRotation === 90 || normalizedRotation === 270
   const outputWidth = swapsAxes ? sourceHeight : sourceWidth
   const outputHeight = swapsAxes ? sourceWidth : sourceHeight

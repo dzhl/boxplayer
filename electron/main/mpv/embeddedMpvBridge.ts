@@ -33,6 +33,7 @@ export interface EmbeddedMpvControlResult {
   capability: EmbeddedMpvCapability
   status?: EmbeddedMpvStatus
   trackStatus?: EmbeddedMpvTrackStatus
+  presentedFrames?: number
   error?: string
   warning?: string
 }

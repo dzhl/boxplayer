@@ -107,7 +107,8 @@ export class EmbeddedMpvTextureBridge {
       if (this.frameStats.received === 0) return
       const averageImport = this.frameStats.sendCount > 0 ? (this.frameStats.importMs / this.frameStats.sendCount).toFixed(1) : '?'
       const averageSend = this.frameStats.sendCount > 0 ? (this.frameStats.sendMs / this.frameStats.sendCount).toFixed(1) : '?'
-      console.log(`[mpv] texture frames sent:${this.frameStats.sent} dropped:${this.frameStats.dropped} received:${this.frameStats.received} errors:${this.frameStats.errors} import:${averageImport}ms send:${averageSend}ms`)
+      const mode = process.platform === 'darwin' ? 'texture' : 'software'
+      console.log(`[mpv] ${mode} frames sent:${this.frameStats.sent} dropped:${this.frameStats.dropped} received:${this.frameStats.received} errors:${this.frameStats.errors} import:${averageImport}ms send:${averageSend}ms`)
       this.frameStats = { received: 0, dropped: 0, sent: 0, errors: 0, importMs: 0, sendMs: 0, sendCount: 0 }
     }, 2000)
     return true
@@ -292,6 +293,7 @@ export class EmbeddedMpvTextureBridge {
       capability,
       status: this.mpv.getStatus?.() || this.latestStatus,
       trackStatus: await this.readTrackStatus(),
+      presentedFrames: this.frameIndex,
       error: this.lastNativeError || undefined
     }
   }
@@ -299,7 +301,9 @@ export class EmbeddedMpvTextureBridge {
   private handleFrame(textureInfo: EmbeddedMpvTextureInfo): void {
     if (!this.window || !this.mpv) return
     if (textureInfo.pixels) {
+      this.frameStats.received++
       if (this.softwareFrameInFlight) {
+        if (this.pendingSoftwareFrame) this.frameStats.dropped++
         this.pendingSoftwareFrame = textureInfo
         return
       }
@@ -315,6 +319,7 @@ export class EmbeddedMpvTextureBridge {
   private sendSoftwareFrame(textureInfo: EmbeddedMpvTextureInfo): void {
     if (!this.window || this.window.isDestroyed() || !textureInfo.pixels) return
     this.softwareFrameInFlight = true
+    this.frameStats.sent++
     this.window.webContents.send('MpvEmbedded:softwareFrame', {
         pixels: textureInfo.pixels,
         width: textureInfo.width,

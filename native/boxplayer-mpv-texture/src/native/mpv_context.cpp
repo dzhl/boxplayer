@@ -829,7 +829,6 @@ void MpvContext::handlePropertyChange(mpv_event_property* prop) {
 
 #ifdef BOXPLAYER_MPV_SOFTWARE
 void MpvContext::renderLoop() {
-    auto lastFrame = std::chrono::steady_clock::time_point::min();
     while (m_running) {
         {
             std::unique_lock<std::mutex> lock(m_renderMutex);
@@ -843,10 +842,9 @@ void MpvContext::renderLoop() {
         // the context halfway through that mutation.
         std::unique_lock<std::mutex> renderApiLock(m_renderApiMutex);
         if (!(mpv_render_context_update(m_renderCtx) & MPV_RENDER_UPDATE_FRAME)) continue;
-        const auto now = std::chrono::steady_clock::now();
-        if (lastFrame != std::chrono::steady_clock::time_point::min() &&
-            now - lastFrame < std::chrono::milliseconds(50)) continue;
-        lastFrame = now;
+        // Render every frame requested by libmpv. The former 50 ms throttle
+        // limited Windows/Linux software presentation to 20 FPS even for
+        // 24/30/60 FPS media and skipped render/report_swap for those frames.
 
         // The software render target must remain stable across source
         // reconfiguration. Properties such as video-crop and video-rotate can
