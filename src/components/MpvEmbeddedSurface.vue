@@ -702,7 +702,12 @@ const handleVideoToggle = async (event: Event, property: string, enabledValue: s
   if (property === 'hwdec') hardwareDecode.value = enabled
   if (property === 'deinterlace') deinterlace.value = enabled
   if (property === 'tone-mapping') hdrToneMapping.value = enabled
-  await setVideoProperty(property, enabled ? enabledValue : disabledValue)
+  let value = enabled ? enabledValue : disabledValue
+  if (property === 'hwdec' && enabled) {
+    const capability = await window.WebMpvEmbeddedCapability?.()
+    if (capability?.platform !== 'darwin') value = 'auto-copy'
+  }
+  await setVideoProperty(property, value)
 }
 
 const handleVideoFilterChange = async (event: Event, property: string, target: string) => {

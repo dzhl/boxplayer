@@ -85,8 +85,10 @@ export class EmbeddedMpvTextureBridge {
     this.mpv = nativeLoadResult.addon.mpvTexture
     try {
       console.error('[mpv] initialize: creating native context')
-      // The software renderer cannot import hardware-decoded GPU surfaces.
-      this.mpv.create(process.platform === 'darwin' ? {} : { headless: false, width: 640, height: 360, hwdec: 'no' })
+      // The software renderer cannot import GPU surfaces directly, but mpv's
+      // copy-back decoder can use the GPU and return frames in system memory.
+      // Unsupported GPUs/codecs automatically fall back to software decode.
+      this.mpv.create(process.platform === 'darwin' ? {} : { headless: false, width: 640, height: 360, hwdec: 'auto-copy' })
       console.error('[mpv] initialize: native context created')
     } catch (error) {
       console.error('[mpv] native addon create failed:', error)
