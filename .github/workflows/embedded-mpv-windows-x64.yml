@@ -107,7 +107,9 @@ jobs:
           pnpm exec playwright test e2e/embeddedMpvPlayback.spec.ts e2e/embeddedMpvWindowsCdp.spec.ts e2e/embeddedMpvControlsCdp.spec.ts --workers=1
 
       - name: Validate real cloud and Emby test coverage
-        if: inputs.real_cloud == true
+        # The MPV candidate branch must exercise real authenticated playback
+        # on push as well as on an explicitly requested release validation.
+        if: inputs.real_cloud == true || github.event_name == 'push'
         env:
           BOXPLAYER_E2E_ACCOUNTS_JSON: ${{ secrets.BOXPLAYER_E2E_ACCOUNTS_WINDOWS_X64_JSON || secrets.BOXPLAYER_E2E_ACCOUNTS_JSON }}
           BOXPLAYER_E2E_TARGETS_JSON: ${{ secrets.BOXPLAYER_E2E_TARGETS_JSON }}
@@ -120,7 +122,7 @@ jobs:
           node scripts/real-media-server-e2e-config.cjs
 
       - name: Build production renderer with real provider credentials
-        if: inputs.real_cloud == true
+        if: inputs.real_cloud == true || github.event_name == 'push'
         env:
           ALIYUN_APP_ID: ${{ secrets.ALIYUN_APP_ID }}
           ALIYUN_APP_SECRET: ${{ secrets.ALIYUN_APP_SECRET }}
@@ -148,7 +150,7 @@ jobs:
           pnpm exec vite build
 
       - name: Verify real cloud and Emby MPV playback without file mutations
-        if: inputs.real_cloud == true
+        if: inputs.real_cloud == true || github.event_name == 'push'
         env:
           BOXPLAYER_E2E_ACCOUNTS_JSON: ${{ secrets.BOXPLAYER_E2E_ACCOUNTS_WINDOWS_X64_JSON || secrets.BOXPLAYER_E2E_ACCOUNTS_JSON }}
           BOXPLAYER_E2E_TARGETS_JSON: ${{ secrets.BOXPLAYER_E2E_TARGETS_JSON }}
