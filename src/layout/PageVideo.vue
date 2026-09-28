@@ -52,7 +52,7 @@ import { resolveFullscreenModalContainer } from '../utils/fullscreenModal'
 import { updateSettingPreservingActivePanel } from '../utils/artplayerSetting'
 import message from '../utils/message'
 import { captureVideoQualitySwitchPlaybackState } from '../utils/videoQualitySwitch'
-import { hasPlaybackHeaders, mergeMpvPlaybackHeaders, mergePlaybackHeaders } from '../utils/playbackHeaders'
+import { hasPlaybackHeaders, mergeMpvPlaybackHeaders, mergePlaybackHeaders, shouldProxyMpvPlayback } from '../utils/playbackHeaders'
 import { getLocalVideoProgress, saveLocalVideoProgress } from '../utils/videoProgress'
 import { isVideoFile } from '../utils/videoFile'
 import { simpleToTradition, traditionToSimple } from 'chinese-simple2traditional'
@@ -2294,8 +2294,10 @@ const resolveRawMpvQualitySource = (data: IRawUrl, preferredQuality?: string): {
   // quality header object must never discard provider authentication.
   const provider = resolveDriveProvider(pageVideo.user_id, pageVideo.drive_id, pageVideo.tokenfrom).provider
   const defaultHeaders = mergeMpvPlaybackHeaders(provider, data.headers, defaultQuality.headers)
-  const useAuthenticatedMpvProxy = !pageVideo.encType && hasPlaybackHeaders(defaultHeaders)
-  const defaultUrl = resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || '', useAuthenticatedMpvProxy ? 'mpv' : '')
+  const useAuthenticatedMpvProxy = shouldProxyMpvPlayback(provider, defaultHeaders, Boolean(pageVideo.encType))
+  const defaultUrl = useAuthenticatedMpvProxy
+    ? resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || '', 'mpv')
+    : defaultQuality.url
   const mpvHeaders = defaultUrl === defaultQuality.url ? defaultHeaders : undefined
   const defaultQualityWidth = (defaultQuality as any).width
   return {

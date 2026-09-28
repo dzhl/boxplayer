@@ -10,6 +10,14 @@ export function hasPlaybackHeaders(headers?: PlaybackHeaders): boolean {
   return !!headers && Object.entries(headers).some(([key, value]) => Boolean(key.trim() && String(value || '').trim()))
 }
 
+export function shouldProxyMpvPlayback(provider: string, headers?: PlaybackHeaders, encrypted = false): boolean {
+  // 139 returns a signed CDN file URL whose User-Agent/Referer/Origin contract
+  // can be passed directly to libmpv. Wrapping it in the renderer HTTP proxy
+  // leaves native MPV stuck at 0:00 on macOS and can surface invalid content on
+  // Linux, even though the same proxy response is readable by Chromium.
+  return !encrypted && provider !== '139' && hasPlaybackHeaders(headers)
+}
+
 /**
  * Merge download headers without allowing an empty quality-level object to hide
  * the provider-level authentication headers. Header names are case-insensitive;

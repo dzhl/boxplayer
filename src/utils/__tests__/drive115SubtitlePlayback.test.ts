@@ -8,10 +8,10 @@ describe('115 subtitle playback', () => {
   it('routes every authenticated MPV quality through the MPV-only proxy without changing web playback', () => {
     const source = readSource('src/layout/PageVideo.vue')
 
-    expect(source).toContain('const useAuthenticatedMpvProxy = !pageVideo.encType && hasPlaybackHeaders(defaultHeaders)')
-    expect(source).toContain("useAuthenticatedMpvProxy ? 'mpv' : ''")
+    expect(source).toContain('const useAuthenticatedMpvProxy = shouldProxyMpvPlayback(provider, defaultHeaders, Boolean(pageVideo.encType))')
+    expect(source).toContain('? resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || \'\', \'mpv\')')
+    expect(source).toContain(': defaultQuality.url')
     expect(source).toContain("const resolveRawMpvQualitySource = (data: IRawUrl")
-    expect(source).toContain("const defaultUrl = resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || '', useAuthenticatedMpvProxy")
     expect(source).toContain('const mpvHeaders = defaultUrl === defaultQuality.url ? defaultHeaders : undefined')
     expect(source).toContain('headers: mpvHeaders')
     expect(source).toContain("const defaultUrl = resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || '')")

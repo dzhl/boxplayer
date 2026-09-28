@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ALIYUN_MPV_PLAYBACK_HEADERS, hasPlaybackHeaders, mergeMpvPlaybackHeaders, mergePlaybackHeaders } from '../playbackHeaders'
+import { ALIYUN_MPV_PLAYBACK_HEADERS, hasPlaybackHeaders, mergeMpvPlaybackHeaders, mergePlaybackHeaders, shouldProxyMpvPlayback } from '../playbackHeaders'
 
 describe('playback header contract', () => {
   it('does not let an empty quality header object hide provider authentication', () => {
@@ -45,5 +45,13 @@ describe('playback header contract', () => {
   it('adds the renderer interceptor headers explicitly for native Aliyun playback', () => {
     expect(mergeMpvPlaybackHeaders('aliyun')).toEqual(ALIYUN_MPV_PLAYBACK_HEADERS)
     expect(mergeMpvPlaybackHeaders('quark')).toBeUndefined()
+  })
+
+  it('passes 139 signed CDN headers directly to MPV instead of using the local proxy', () => {
+    const headers = { 'User-Agent': 'BoxPlayer', Referer: 'https://yun.139.com/', Origin: 'https://yun.139.com' }
+
+    expect(shouldProxyMpvPlayback('139', headers)).toBe(false)
+    expect(shouldProxyMpvPlayback('quark', headers)).toBe(true)
+    expect(shouldProxyMpvPlayback('139', headers, true)).toBe(false)
   })
 })
