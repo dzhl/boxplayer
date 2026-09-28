@@ -306,6 +306,11 @@ async function assertRealMpvPlayback(player: Page, provider: string): Promise<vo
 
 async function assertProviderMpvTransport(player: Page, provider: string): Promise<void> {
   if (provider !== '139') return
+  await expect.poll(async () => player.evaluate(() => {
+    const props = (document.querySelector('#mpvEmbeddedPlayer') as any)?.__vueParentComponent?.props || {}
+    const headerNames = Object.keys(props.headers || {}).map(name => name.toLowerCase())
+    return /^https?:\/\//.test(String(props.url || '')) && ['user-agent', 'referer', 'origin'].every(name => headerNames.includes(name))
+  }), { message: '139 MPV transport did not become ready', timeout: 90_000, intervals: [250, 500, 1_000] }).toBe(true)
   const transport = await player.evaluate(() => {
     const props = (document.querySelector('#mpvEmbeddedPlayer') as any)?.__vueParentComponent?.props || {}
     const url = new URL(String(props.url || ''))
