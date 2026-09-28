@@ -554,7 +554,7 @@
               <div class="person-shell">
                 <div class="person-hero">
                   <img
-                    v-if="personBackdropUrl"
+                    v-if="personBackdropUrl && !detailBackdropLoadFailed"
                     class="person-hero-backdrop"
                     :src="personBackdropUrl"
                     :alt="currentDetail.title"
@@ -773,7 +773,7 @@
             <template v-else-if="currentDetail">
               <div class="detail-shell">
                 <img
-                  v-if="detailBackdropUrl"
+                  v-if="detailBackdropUrl && !detailBackdropLoadFailed"
                   class="detail-page-backdrop"
                   :src="detailBackdropUrl"
                   :alt="currentDetail.title"
@@ -782,7 +782,7 @@
                 <div class="detail-page-tint" aria-hidden="true" />
                 <div class="detail-backdrop-stage">
                   <img
-                    v-if="detailBackdropUrl"
+                    v-if="detailBackdropUrl && !detailBackdropLoadFailed"
                     class="detail-backdrop-image"
                     :src="detailBackdropUrl"
                     :alt="currentDetail.title"
@@ -795,51 +795,156 @@
                   <div class="detail-top-back">
                     <button type="button" class="detail-back-button" @click="handleBack">
                       <IconFont name="iconarrow-left-2-icon" />
-                      <span class="back-button-server-icon">
-                        <img :src="serverDisplayIcon(registry.currentServer)" :alt="registry.currentServer?.name || 'server'" @error="handleCurrentServerIconError" />
-                      </span>
                       <span>{{ currentBackLabel }}</span>
                     </button>
+                    <div class="detail-top-actions">
+                      <a-trigger
+                        v-if="detailSourceOptions.length > 0"
+                        v-model:popup-visible="topVersionMenuVisible"
+                        trigger="click"
+                        position="bottom"
+                        auto-fit-popup-width="false"
+                        :unmount-on-close="false"
+                      >
+                        <button type="button" class="detail-top-icon-action" title="更多版本">
+                          <IconFont name="icongengduo" />
+                          <IconFont class="detail-top-chevron" name="icondown" />
+                        </button>
+                        <template #content>
+                          <div class="detail-version-menu">
+                            <button
+                              v-for="source in detailSourceOptions"
+                              :key="source.id"
+                              type="button"
+                              class="detail-version-option"
+                              :class="{ active: selectedSourceOption?.id === source.id }"
+                              @click="selectSourceOption(source.id)"
+                            >
+                              <div class="detail-version-main">
+                                <span>{{ source.title }}</span>
+                                <small v-if="source.fileSubLabel">{{ source.fileSubLabel }}</small>
+                              </div>
+                              <span v-if="selectedSourceOption?.id === source.id" class="detail-version-check">{{ t('mediaServer.current') }}</span>
+                            </button>
+                          </div>
+                        </template>
+                      </a-trigger>
+                      <button v-else type="button" class="detail-top-icon-action" disabled title="暂无更多版本">
+                        <IconFont name="icongengduo" />
+                      </button>
+                    </div>
                   </div>
 
                   <div class="detail-hero-copy">
                     <div class="detail-overlay-grid">
-                      <div class="detail-hero-poster media-image-frame" :class="{ 'has-image': !!detailHeroPosterImage }">
-                        <img
-                          v-if="detailHeroPosterImage"
-                          :src="detailHeroPosterImage"
-                          :alt="currentDetail.title || detailDisplayedItem.title"
-                          @load="handleCardImageLoad"
-                          @error="handleCardImageError"
-                        />
-                        <div class="media-card-placeholder media-image-placeholder">{{ (currentDetail.title || detailDisplayedItem.title).slice(0, 1) }}</div>
-                      </div>
-
-                      <div class="detail-hero-main">
-                        <div class="detail-title-block">
+                      <div class="detail-hero-controls">
+                        <div v-if="detailLogoUrl" class="detail-title-block detail-title-block-brand">
                           <img
-                            v-if="detailLogoUrl"
                             class="detail-hero-logo"
                             :src="detailLogoUrl"
                             :alt="currentDetail.title"
                             @error="handleDetailLogoError"
                           />
-                          <div v-else class="detail-hero-title">{{ currentDetail.title }}</div>
                         </div>
 
+                        <div class="detail-actions-column">
+                          <div class="detail-play-row">
+                            <button class="detail-primary-play" @click="handleDetailPlay">
+                              <span class="detail-play-label">{{ detailPlayLabel }}</span>
+                            </button>
+                            <a-trigger
+                              v-if="detailSourceOptions.length > 0"
+                              v-model:popup-visible="versionMenuVisible"
+                              trigger="click"
+                              position="bottom"
+                              auto-fit-popup-width="false"
+                              :unmount-on-close="false"
+                            >
+                              <button class="detail-play-version-trigger" title="选择视频版本">
+                                <IconFont name="icondown" />
+                              </button>
+                              <template #content>
+                                <div class="detail-version-menu">
+                                  <button
+                                    v-for="source in detailSourceOptions"
+                                    :key="source.id"
+                                    type="button"
+                                    class="detail-version-option"
+                                    :class="{ active: selectedSourceOption?.id === source.id }"
+                                    @click="selectSourceOption(source.id)"
+                                  >
+                                    <div class="detail-version-main">
+                                      <span>{{ source.title }}</span>
+                                      <small v-if="source.fileSubLabel">{{ source.fileSubLabel }}</small>
+                                    </div>
+                                    <span v-if="selectedSourceOption?.id === source.id" class="detail-version-check">{{ t('mediaServer.current') }}</span>
+                                  </button>
+                                </div>
+                              </template>
+                            </a-trigger>
+                            <button v-else class="detail-play-version-trigger" disabled title="暂无更多版本">
+                              <IconFont name="icondown" />
+                            </button>
+                          </div>
+                          <div class="detail-icon-actions">
+                            <button
+                              class="detail-square-action"
+                              :class="{ active: detailIsWatched }"
+                              title="标记已观看"
+                              @click="handleDetailAction('watched')"
+                            >
+                              <IconFont name="iconchakan" />
+                            </button>
+                            <a-trigger
+                              v-if="detailDownloadOptions.length > 1"
+                              trigger="click"
+                              position="bottom"
+                              auto-fit-popup-width="false"
+                            >
+                              <button class="detail-square-action" title="下载">
+                                <IconFont name="icondownload" />
+                              </button>
+                              <template #content>
+                                <div class="detail-version-menu">
+                                  <button
+                                    v-for="option in detailDownloadOptions"
+                                    :key="option.key"
+                                    type="button"
+                                    class="detail-version-option"
+                                    @click="handleDetailDownload(option.key)"
+                                  >
+                                    <div class="detail-version-main">
+                                      <span>{{ option.label }}</span>
+                                      <small v-if="option.description">{{ option.description }}</small>
+                                    </div>
+                                  </button>
+                                </div>
+                              </template>
+                            </a-trigger>
+                            <button v-else class="detail-square-action" title="下载" @click="handleDetailDownload('current')">
+                              <IconFont name="icondownload" />
+                            </button>
+                            <button
+                              class="detail-square-action"
+                              :class="{ active: detailIsFavorite }"
+                              title="收藏"
+                              @click="handleDetailAction('favorite')"
+                            >
+                              <IconFont name="iconstar" :fill="detailIsFavorite ? 'currentColor' : 'none'" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="detail-hero-main">
                         <div class="detail-synopsis-column">
-                          <div v-if="detailEpisodeHeading" class="detail-episode-heading">{{ detailEpisodeHeading }}</div>
-                          <div class="detail-rating-line">
-                            <span v-if="typeof detailDisplayedItem.rating === 'number'" class="detail-star-rating">
-                              ★ {{ detailDisplayedItem.rating.toFixed(1) }}
-                            </span>
-                            <span v-if="detailGenreLine">{{ detailGenreLine }}</span>
+                          <div class="detail-episode-heading">
+                            <span v-if="detailEpisodeHeading">{{ detailEpisodeHeading }} · </span>{{ detailDisplayedItem.title || currentDetail.title }}
                           </div>
-                          <div class="detail-tech-line">
-                            {{ detailTechnicalLine }}
-                          </div>
-                          <div v-if="detailMetaBadges.length > 0" class="detail-meta-badges">
+                          <div class="detail-facts-line">
+                            <span v-if="detailTechnicalLine">{{ detailTechnicalLine }}</span>
                             <span v-for="badge in detailMetaBadges" :key="badge" class="detail-meta-badge">{{ badge }}</span>
+                            <span v-if="detailGenreLine">{{ detailGenreLine }}</span>
                           </div>
                           <div class="detail-overview-block" :class="{ 'is-empty': !currentOverviewText }">
                             <p
@@ -850,94 +955,10 @@
                               {{ currentOverviewText || t('mediaServer.noOverview') }}
                             </p>
                           </div>
-                        </div>
-
-                        <div class="detail-actions-column">
-                          <div class="detail-icon-actions">
-                            <button
-                              class="detail-square-action"
-                              :class="{ active: detailIsWatched }"
-                              @click="handleDetailAction('watched')"
-                            >
-                              <span class="detail-square-glyph">✓</span>
-                            </button>
-                            <button
-                              class="detail-square-action"
-                              :class="{ active: detailIsFavorite }"
-                              @click="handleDetailAction('favorite')"
-                            >
-                              <span class="detail-square-glyph">{{ detailIsFavorite ? '♥' : '♡' }}</span>
-                            </button>
-                            <a-trigger
-                              v-if="detailSourceOptions.length > 0"
-                              v-model:popup-visible="versionMenuVisible"
-                              trigger="click"
-                              position="bottom"
-                              auto-fit-popup-width="false"
-                              :unmount-on-close="false"
-                            >
-                              <button class="detail-square-action detail-square-action-version">
-                                <span class="detail-square-glyph">⋯</span>
-                              </button>
-                              <template #content>
-                                <div class="detail-version-menu">
-                                  <button
-                                  v-for="source in detailSourceOptions"
-                                  :key="source.id"
-                                  type="button"
-                                  class="detail-version-option"
-                                  :class="{ active: selectedSourceOption?.id === source.id }"
-                                  @click="selectSourceOption(source.id); versionMenuVisible = false"
-                                >
-                                  <div class="detail-version-main">
-                                    <span>{{ source.title }}</span>
-                                    <small v-if="source.fileSubLabel">{{ source.fileSubLabel }}</small>
-                                  </div>
-                                  <span v-if="selectedSourceOption?.id === source.id" class="detail-version-check">{{ t('mediaServer.current') }}</span>
-                                </button>
-                                </div>
-                              </template>
-                            </a-trigger>
-                            <button v-else class="detail-square-action detail-square-action-version" disabled>
-                              <span class="detail-square-glyph">⋯</span>
-                            </button>
+                          <div v-if="typeof detailDisplayedItem.rating === 'number'" class="detail-score-row">
+                            <img class="detail-score-logo" :src="tmdbVerticalLogo" alt="TMDB" />
+                            <strong>{{ detailDisplayedItem.rating.toFixed(1) }}</strong>
                           </div>
-
-                          <button class="detail-primary-play" @click="handleDetailPlay">
-                            <span class="detail-play-glyph">▶</span>
-                            <span class="detail-play-label">{{ detailPlayLabel }}</span>
-                          </button>
-                          <a-trigger
-                            v-if="detailDownloadOptions.length > 1"
-                            trigger="click"
-                            position="bottom"
-                            auto-fit-popup-width="false"
-                          >
-                            <button class="detail-secondary-download">
-                              <span class="detail-play-glyph">↓</span>
-                              <span class="detail-play-label">{{ t('mediaServer.download') }}</span>
-                            </button>
-                            <template #content>
-                              <div class="detail-version-menu">
-                                <button
-                                  v-for="option in detailDownloadOptions"
-                                  :key="option.key"
-                                  type="button"
-                                  class="detail-version-option"
-                                  @click="handleDetailDownload(option.key)"
-                                >
-                                  <div class="detail-version-main">
-                                    <span>{{ option.label }}</span>
-                                    <small v-if="option.description">{{ option.description }}</small>
-                                  </div>
-                                </button>
-                              </div>
-                            </template>
-                          </a-trigger>
-                          <button v-else class="detail-secondary-download" @click="handleDetailDownload('current')">
-                            <span class="detail-play-glyph">↓</span>
-                            <span class="detail-play-label">{{ t('mediaServer.download') }}</span>
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -967,7 +988,7 @@
 
                     <div class="detail-episodes-rail">
                       <button
-                        v-for="episode in detailEpisodeItems"
+                        v-for="(episode, episodeIndex) in detailEpisodeItems"
                         :key="episode.id"
                         class="detail-episode-card"
                         :class="{ selected: selectedEpisodeId === episode.id }"
@@ -989,14 +1010,17 @@
                             <div class="detail-episode-progress-bar" :style="{ width: `${Math.min(100, episode.progress)}%` }" />
                           </div>
                         </div>
-                        <div class="detail-episode-kicker">{{ detailEpisodeLocator(episode) }}</div>
-                        <div class="detail-episode-title">{{ detailEpisodeTitle(episode) }}</div>
+                        <div class="detail-episode-caption">
+                          <span class="detail-episode-index">{{ episodeIndex + 1 }}.</span>
+                          <span class="detail-episode-kicker">{{ detailEpisodeLocator(episode) }}</span>
+                          <span class="detail-episode-title">{{ detailEpisodeTitle(episode) }}</span>
+                        </div>
                       </button>
                     </div>
 
                   </section>
 
-                  <section v-if="detailGenres.length > 0" class="detail-section">
+                  <section v-if="detailGenres.length > 0" class="detail-section detail-section-genres">
                     <div class="detail-section-header">
                       <h4>类型</h4>
                     </div>
@@ -1012,7 +1036,7 @@
                     </div>
                   </section>
 
-                  <section v-if="detailStudios.length > 0" class="detail-section">
+                  <section v-if="detailStudios.length > 0" class="detail-section detail-section-studios">
                     <div class="detail-section-header">
                       <h4>工作室</h4>
                     </div>
@@ -1028,9 +1052,9 @@
                     </div>
                   </section>
 
-                  <section v-if="detailPeople.length > 0" class="detail-section">
+                  <section v-if="detailPeople.length > 0" class="detail-section detail-section-people">
                     <div class="detail-section-header">
-                      <h4>演员与工作人员</h4>
+                      <h4>演职员</h4>
                     </div>
                     <div class="people-rail detail-people-rail">
                       <button
@@ -1055,7 +1079,7 @@
                     </div>
                   </section>
 
-                  <section v-if="detailSimilarLoading || detailSimilarItems.length > 0 || detailSimilarError" class="detail-section">
+                  <section v-if="detailSimilarLoading || detailSimilarItems.length > 0 || detailSimilarError" class="detail-section detail-section-similar">
                     <div class="detail-section-header">
                       <h4>推荐</h4>
                     </div>
@@ -1084,7 +1108,7 @@
                     </div>
                   </section>
 
-                  <section v-if="detailDisplayedItem.externalLinks.length > 0" class="detail-section">
+                  <section v-if="detailDisplayedItem.externalLinks.length > 0" class="detail-section detail-section-links">
                     <div class="detail-section-header">
                       <h4>链接</h4>
                     </div>
@@ -1102,10 +1126,16 @@
                     </div>
                   </section>
 
-                  <section v-if="selectedSourceOption?.mediaInfoCards.length || selectedSourceOption?.fileLabel || detailDisplayedItem.mediaInfoCards.length || detailDisplayedItem.fileLabel" class="detail-section">
+                  <section v-if="selectedSourceOption?.mediaInfoCards.length || selectedSourceOption?.fileLabel || detailDisplayedItem.mediaInfoCards.length || detailDisplayedItem.fileLabel" class="detail-section detail-section-media">
                     <div class="detail-section-header">
                       <h4>媒体</h4>
                     </div>
+                    <div v-if="selectedSourceOption?.fileLabel || detailDisplayedItem.fileLabel" class="detail-file-bar">
+                      <div class="detail-file-source">在 {{ registry.currentServer?.name || '媒体服务器' }} 上</div>
+                      <div class="detail-file-name">{{ selectedSourceOption?.fileLabel || detailDisplayedItem.fileLabel }}</div>
+                      <div v-if="selectedSourceOption?.fileSubLabel || detailDisplayedItem.fileSubLabel" class="detail-file-meta">{{ selectedSourceOption?.fileSubLabel || detailDisplayedItem.fileSubLabel }}</div>
+                    </div>
+
                     <div class="detail-media-card-rail">
                       <div
                         v-for="card in detailMediaCards"
@@ -1132,10 +1162,6 @@
                       </div>
                     </div>
 
-                    <div v-if="selectedSourceOption?.fileLabel || detailDisplayedItem.fileLabel" class="detail-file-bar">
-                      <div class="detail-file-name">{{ selectedSourceOption?.fileLabel || detailDisplayedItem.fileLabel }}</div>
-                      <div v-if="selectedSourceOption?.fileSubLabel || detailDisplayedItem.fileSubLabel" class="detail-file-meta">{{ selectedSourceOption?.fileSubLabel || detailDisplayedItem.fileSubLabel }}</div>
-                    </div>
                   </section>
                 </div>
               </div>
@@ -1366,7 +1392,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import MediaServerRegistryPanel from '../components/media-server/MediaServerRegistryPanel.vue'
 import MediaServerPosterRow from '../components/media-server/home/MediaServerPosterRow.vue'
 import MediaServerResumeRow from '../components/media-server/home/MediaServerResumeRow.vue'
@@ -1374,6 +1400,7 @@ import MediaServerStatsRow from '../components/media-server/home/MediaServerStat
 import jellyfinIcon from '../assets/media-server/jellyfin.svg'
 import embyIcon from '../assets/media-server/emby.svg'
 import plexIcon from '../assets/media-server/plex.svg'
+import tmdbVerticalLogo from '../assets/media-server/tmdb_vertical_logo.svg'
 import { getMediaServerDownloadInfo, getMediaServerPlaybackInfo, getMediaServerSimilarItems, updateMediaServerFavoriteState, updateMediaServerPlayedState } from '../media-server/contentGateway'
 import { resolveMediaServerImage } from '../media-server/imageSources'
 import { toMsCacheUrl } from '../media-server/imageCache'
@@ -1404,6 +1431,7 @@ const selectedSeasonId = ref('')
 const selectedEpisodeId = ref('')
 const selectedSourceId = ref('')
 const versionMenuVisible = ref(false)
+const topVersionMenuVisible = ref(false)
 const detailSimilarItems = ref<MediaServerLibraryNode[]>([])
 const homeLibraryManagerVisible = ref(false)
 const draggingHomeLibraryId = ref('')
@@ -1423,10 +1451,9 @@ const activeMediaInfoCard = ref<MediaServerMediaInfoCard | null>(null)
 const selectedAudioStreamIndex = ref<number>(-1)
 const selectedSubtitleStreamIndex = ref<number>(-1)
 const detailLogoLoadFailed = ref(false)
-const MEDIA_SERVER_PLAYLIST_KEY = 'MediaServer_Playlist'
+const detailBackdropLoadFailed = ref(false)
 const MEDIA_SERVER_ICON_SET_URLS_KEY = 'MediaServer_IconSetUrls'
 const MEDIA_SERVER_PRIMARY_LINE_KEY = '__primary__'
-const playlistIds = ref<string[]>([])
 const serverIconManagerVisible = ref(false)
 const addServerIconSetVisible = ref(false)
 const serverIconSearchText = ref('')
@@ -1469,7 +1496,6 @@ const writeLocalIdList = (key: string, items: string[]) => {
   localStorage.setItem(key, JSON.stringify(items))
 }
 
-playlistIds.value = readLocalIdList(MEDIA_SERVER_PLAYLIST_KEY)
 serverIconSetUrls.value = readLocalIdList(MEDIA_SERVER_ICON_SET_URLS_KEY)
 
 const currentRoute = computed(() => navigation.currentRoute)
@@ -1799,7 +1825,7 @@ const currentPageTitle = computed(() => {
 })
 const currentBackLabel = computed(() => {
   if (currentRoute.value.kind === 'item-detail') {
-    return detailDisplayedItem.value.title || currentRoute.value.title || '返回'
+    return currentDetail.value?.title || currentRoute.value.title || detailDisplayedItem.value.title || '返回'
   }
   if (currentRoute.value.kind === 'library-page') return currentRoute.value.title || '媒体库'
   if (currentRoute.value.kind === 'studio-page') return currentRoute.value.title || '工作室'
@@ -1916,22 +1942,13 @@ const handleCardImageLoad = (event: Event) => {
   frame?.classList.remove('is-broken')
 }
 
-const handleBackdropImageError = (event: Event) => {
-  const target = event.target as HTMLImageElement | null
-  if (target) {
-    target.style.display = 'none'
-  }
+const handleBackdropImageError = () => {
+  detailBackdropLoadFailed.value = true
 }
 
 const detailBackdropUrl = computed(() => {
   if (!currentDetail.value) return ''
   return wrapCacheUrl(upscaleHeroImageUrl(currentDetail.value.images?.backdrop))
-})
-
-const detailHeroPosterImage = computed(() => {
-  const detailImage = pickPrimaryImage(currentDetail.value)
-  if (detailImage) return detailImage
-  return pickPrimaryImage(detailDisplayedItem.value)
 })
 
 const detailLogoUrl = computed(() => {
@@ -2047,11 +2064,11 @@ const detailMediaCards = computed<MediaServerMediaInfoCard[]>(() => {
 const selectSourceOption = (sourceId: string) => {
   selectedSourceId.value = sourceId
   versionMenuVisible.value = false
+  topVersionMenuVisible.value = false
 }
 
 const detailIsWatched = computed(() => detailDisplayedItem.value.isPlayed === true)
 const detailIsFavorite = computed(() => detailDisplayedItem.value.isFavorite === true)
-const detailInPlaylist = computed(() => !!detailDisplayedItem.value.id && playlistIds.value.includes(detailDisplayedItem.value.id))
 
 const detailPlayLabel = computed(() => {
   const match = detailDisplayedItem.value.title.match(/S(\d+)E(\d+)/i)
@@ -2502,6 +2519,11 @@ watch(() => [registry.currentServer?.id, currentRoute.value.kind] as const, ([se
 
 watch(() => currentDetail.value?.id, () => {
   detailLogoLoadFailed.value = false
+  detailBackdropLoadFailed.value = false
+})
+
+watch(() => [detailBackdropUrl.value, personBackdropUrl.value] as const, () => {
+  detailBackdropLoadFailed.value = false
 })
 
 const loadCurrentLibrary = async (force = false) => {
@@ -3088,7 +3110,7 @@ const selectDetailEpisode = async (episodeId: string) => {
   }
 }
 
-const handleDetailAction = async (action: 'watched' | 'favorite' | 'playlist') => {
+const handleDetailAction = async (action: 'watched' | 'favorite') => {
   const itemId = detailDisplayedItem.value.id
   const server = registry.currentServer
   if (!itemId || !server) return
@@ -3106,26 +3128,17 @@ const handleDetailAction = async (action: 'watched' | 'favorite' | 'playlist') =
     }
     return
   }
-  if (action === 'favorite') {
-    const wasFavorite = detailIsFavorite.value
-    try {
-      await updateMediaServerFavoriteState(server, itemId, wasFavorite)
-      await content.loadItemDetail(server, itemId, true)
-      if (currentDetail.value?.id && currentDetail.value.id !== itemId) {
-        await content.loadItemDetail(server, currentDetail.value.id, true)
-      }
-      message.success(wasFavorite ? '已取消收藏' : '已加入收藏')
-    } catch (error: any) {
-      message.error(error?.message || '收藏操作失败')
+  const wasFavorite = detailIsFavorite.value
+  try {
+    await updateMediaServerFavoriteState(server, itemId, wasFavorite)
+    await content.loadItemDetail(server, itemId, true)
+    if (currentDetail.value?.id && currentDetail.value.id !== itemId) {
+      await content.loadItemDetail(server, currentDetail.value.id, true)
     }
-    return
+    message.success(wasFavorite ? '已取消收藏' : '已加入收藏')
+  } catch (error: any) {
+    message.error(error?.message || '收藏操作失败')
   }
-  const next = detailInPlaylist.value
-    ? playlistIds.value.filter((id) => id !== itemId)
-    : [...playlistIds.value, itemId]
-  playlistIds.value = next
-  writeLocalIdList(MEDIA_SERVER_PLAYLIST_KEY, next)
-  message.success(detailInPlaylist.value ? '已加入播放列表' : '已移出播放列表')
 }
 
 const handleDetailPlay = async () => {
@@ -3321,6 +3334,7 @@ const loadCurrentDetail = async (force = false) => {
     selectedEpisodeId.value = ''
     selectedSourceId.value = ''
     versionMenuVisible.value = false
+    topVersionMenuVisible.value = false
     detailSimilarError.value = ''
     if (force) detailSimilarItems.value = []
     await Promise.all([
@@ -3347,6 +3361,20 @@ watch(() => [
   if (serverId && (routeKind === 'item-detail' || routeKind === 'person-page')) {
     loadCurrentDetail(false)
   }
+})
+
+watch(() => [
+  currentRoute.value.kind,
+  currentRoute.value.kind === 'item-detail'
+    ? currentRoute.value.itemId
+    : currentRoute.value.kind === 'person-page'
+      ? currentRoute.value.personId
+      : currentRoute.value.kind === 'library-page'
+        ? currentRoute.value.libraryId
+        : ''
+] as const, async () => {
+  await nextTick()
+  workspacePageRef.value?.scrollTo({ top: 0, left: 0, behavior: 'auto' })
 })
 
 watch(() => [currentDetail.value?.id, currentDetail.value?.kind, detailSeasonMenu.value.map((item) => item.id).join(',')] as const, async ([detailId, detailKind]) => {
@@ -3383,6 +3411,7 @@ watch(() => detailEpisodeItems.value.map((item) => item.id).join(','), async (ep
 watch(() => detailDisplayedItem.value.id, () => {
   selectedSourceId.value = ''
   versionMenuVisible.value = false
+  topVersionMenuVisible.value = false
   mediaInfoModalVisible.value = false
   activeMediaInfoCard.value = null
   selectedAudioStreamIndex.value = -1
@@ -6028,6 +6057,7 @@ onUnmounted(() => {
   min-height: clamp(940px, 96vh, 1180px);
   overflow: hidden;
   border-radius: 0;
+  background: linear-gradient(180deg, rgba(122, 101, 88, 0.82), rgba(208, 190, 176, 0.76));
 }
 
 .detail-backdrop-image,
@@ -6194,14 +6224,14 @@ onUnmounted(() => {
 
 .detail-overlay-grid {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   column-gap: 30px;
   align-items: end;
   width: min(1880px, 100%);
 }
 
 .detail-hero-poster {
-  width: 280px;
+  width: 240px;
   aspect-ratio: 2 / 3;
   border-radius: 24px;
   overflow: hidden;
@@ -7079,7 +7109,7 @@ onUnmounted(() => {
   }
 
   .detail-hero-poster {
-    width: min(300px, 54vw);
+    width: min(240px, 54vw);
   }
 
   .detail-actions-column {
@@ -7310,6 +7340,13 @@ onUnmounted(() => {
 [arco-theme='dark'] .detail-page-tint {
   background:
     linear-gradient(180deg, rgba(12, 18, 26, 0.08) 0%, rgba(16, 24, 34, 0.16) 54%, rgba(12, 18, 26, 0.18) 100%);
+}
+
+[arco-theme='dark'] .detail-backdrop-stage,
+[arco-theme='dark'] .detail-backdrop-fallback {
+  background:
+    radial-gradient(circle at 28% 18%, rgba(58, 72, 88, 0.38), transparent 38%),
+    linear-gradient(180deg, #202a36 0%, #131b25 58%, #0c121a 100%);
 }
 
 [arco-theme='dark'] .workspace-toolbar,
@@ -8680,6 +8717,20 @@ body:not([arco-theme='dark']) #xbybody .media-server-workspace .detail-episode-t
   transform: none !important;
 }
 
+/* All media-server image fallbacks share the same dark surface, including
+   home rows, library cards, detail posters, episode stills, and people. */
+body[arco-theme='dark'] #xbybody .media-server-workspace .media-image-placeholder {
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 54%),
+    linear-gradient(180deg, rgb(44, 52, 66) 0%, rgb(28, 34, 46) 100%) !important;
+}
+
+body[arco-theme='dark'] #xbybody .media-server-workspace .media-image-placeholder::before {
+  box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.16) !important;
+  filter: grayscale(1) brightness(1.18) contrast(0.9) !important;
+  opacity: 0.72 !important;
+}
+
 /* ── popup/dropdown glass background ── */
 #xbybody .arco-select-popup-container .arco-select-popup-inner,
 #xbybody .arco-trigger-popup-wrapper .arco-dropdown-list,
@@ -8698,5 +8749,685 @@ body[arco-theme='dark'] #xbybody .arco-trigger-popup {
   background: linear-gradient(180deg, rgba(24, 29, 40, 0.92), rgba(17, 21, 30, 0.88));
   border-color: rgba(255, 255, 255, 0.08);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+/* ── Cinematic media detail, matched to the compact Emby-style reference. ── */
+#xbybody .media-server-workspace .detail-shell {
+  --detail-surface: #191919;
+  --detail-surface-soft: #242424;
+  --detail-copy: rgba(255, 255, 255, 0.94);
+  --detail-copy-muted: rgba(255, 255, 255, 0.66);
+  --detail-accent: #ff7a00;
+  gap: 0 !important;
+  min-height: 100%;
+  color: var(--detail-copy) !important;
+  background: var(--detail-surface) !important;
+}
+
+#xbybody .media-server-workspace .detail-shell::before,
+#xbybody .media-server-workspace .detail-page-backdrop,
+#xbybody .media-server-workspace .detail-page-tint {
+  display: none !important;
+}
+
+#xbybody .media-server-workspace .detail-backdrop-stage {
+  min-height: max(clamp(620px, 68vh, 940px), calc(30vw + 54px)) !important;
+  overflow: hidden !important;
+  background: #242424 !important;
+}
+
+#xbybody .media-server-workspace .detail-backdrop-image,
+#xbybody .media-server-workspace .detail-backdrop-fallback {
+  top: 54px !important;
+  height: calc(100% - 54px) !important;
+}
+
+#xbybody .media-server-workspace .detail-backdrop-image {
+  object-position: center 10% !important;
+  filter: saturate(0.94) brightness(0.88);
+}
+
+#xbybody .media-server-workspace .detail-backdrop-fallback,
+body[arco-theme='dark'] #xbybody .media-server-workspace .detail-backdrop-fallback,
+body:not([arco-theme='dark']) #xbybody .media-server-workspace .detail-backdrop-fallback {
+  background:
+    radial-gradient(circle at 34% 12%, rgba(76, 87, 104, 0.38), transparent 35%),
+    linear-gradient(180deg, #28303a 0%, #20252d 46%, #191919 100%) !important;
+}
+
+#xbybody .media-server-workspace .detail-backdrop-mask {
+  top: 54px !important;
+  background:
+    linear-gradient(90deg, rgba(12, 12, 12, 0.18) 0%, rgba(12, 12, 12, 0.06) 45%, rgba(12, 12, 12, 0.16) 100%),
+    linear-gradient(180deg, rgba(12, 12, 12, 0.01) 0%, rgba(19, 19, 19, 0.03) 64%, rgba(25, 25, 25, 0.7) 87%, #191919 100%) !important;
+}
+
+#xbybody .media-server-workspace .detail-backdrop-bottom-haze {
+  left: 0 !important;
+  right: 0 !important;
+  bottom: -1px !important;
+  height: 32% !important;
+  border-radius: 0 !important;
+  filter: none !important;
+  background: linear-gradient(180deg, transparent 0%, rgba(25, 25, 25, 0.38) 54%, #191919 100%) !important;
+}
+
+#xbybody .media-server-workspace .detail-top-back {
+  position: absolute !important;
+  inset: 0 0 auto 0 !important;
+  z-index: 5 !important;
+  height: 54px !important;
+  padding: 0 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  background: #191919 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+#xbybody .media-server-workspace .detail-back-button {
+  min-width: 0 !important;
+  height: 54px !important;
+  padding: 0 !important;
+  gap: 12px !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  font-size: 15px !important;
+  font-weight: 760 !important;
+}
+
+#xbybody .media-server-workspace .detail-back-button > .iconfont-svg {
+  width: 38px !important;
+  height: 38px !important;
+  padding: 9px !important;
+  overflow: visible !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 50% !important;
+  background: #222 !important;
+  box-sizing: border-box !important;
+  opacity: 1 !important;
+}
+
+#xbybody .media-server-workspace .detail-back-button > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-server-workspace .detail-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+#xbybody .media-server-workspace .detail-top-icon-action {
+  position: relative;
+  height: 38px;
+  min-width: 38px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.78);
+  background: #222;
+  cursor: pointer;
+}
+
+#xbybody .media-server-workspace .detail-top-icon-action:hover,
+#xbybody .media-server-workspace .detail-top-icon-action.active {
+  color: #fff;
+  background: #303030;
+}
+
+#xbybody .media-server-workspace .detail-top-icon-action[disabled] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+#xbybody .media-server-workspace .detail-top-action-plus {
+  margin-left: -7px;
+  margin-top: -10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+#xbybody .media-server-workspace .detail-top-chevron {
+  width: 12px !important;
+  height: 12px !important;
+}
+
+#xbybody .media-server-workspace .detail-hero-copy {
+  inset: 54px 0 0 !important;
+  padding: 0 34px 12px !important;
+  justify-content: flex-end !important;
+}
+
+#xbybody .media-server-workspace .detail-overlay-grid {
+  width: 100% !important;
+  max-width: none !important;
+  grid-template-columns: minmax(232px, 280px) minmax(0, 1fr) !important;
+  column-gap: 34px !important;
+  align-items: end !important;
+}
+
+#xbybody .media-server-workspace .detail-hero-controls {
+  min-height: 242px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+#xbybody .media-server-workspace .detail-title-block-brand {
+  min-height: 74px;
+  margin: 0 0 18px !important;
+  display: flex;
+  align-items: flex-end;
+}
+
+#xbybody .media-server-workspace .detail-hero-logo {
+  max-width: 190px !important;
+  max-height: 82px !important;
+  object-position: left bottom !important;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.42)) !important;
+}
+
+#xbybody .media-server-workspace .detail-actions-column {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  gap: 12px !important;
+}
+
+#xbybody .media-server-workspace .detail-play-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 10px;
+}
+
+#xbybody .media-server-workspace .detail-primary-play {
+  order: 0;
+  width: 100% !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  color: rgba(25, 25, 25, 0.9) !important;
+  background: rgba(231, 231, 235, 0.72) !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+  font-weight: 780 !important;
+}
+
+#xbybody .media-server-workspace .detail-primary-play:hover {
+  color: #111 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: none !important;
+}
+
+#xbybody .media-server-workspace .detail-play-version-trigger {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(62, 62, 62, 0.94);
+  cursor: pointer;
+}
+
+#xbybody .media-server-workspace .detail-play-version-trigger:hover {
+  color: #fff;
+  background: #505050;
+}
+
+#xbybody .media-server-workspace .detail-play-version-trigger[disabled] {
+  opacity: 0.52;
+  cursor: default;
+}
+
+#xbybody .media-server-workspace .detail-play-version-trigger > .iconfont-svg {
+  width: 18px;
+  height: 18px;
+}
+
+#xbybody .media-server-workspace .detail-icon-actions {
+  order: 1;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: stretch !important;
+  gap: 10px !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+#xbybody .media-server-workspace .detail-square-action {
+  position: relative;
+  flex: 1 1 0 !important;
+  width: auto !important;
+  height: 44px !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 999px !important;
+  color: rgba(255, 255, 255, 0.86) !important;
+  background: rgba(49, 49, 49, 0.94) !important;
+  box-shadow: none !important;
+}
+
+#xbybody .media-server-workspace .detail-square-action:hover,
+#xbybody .media-server-workspace .detail-square-action.active {
+  color: #fff !important;
+  background: #414141 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#xbybody .media-server-workspace .detail-square-action > .iconfont-svg {
+  width: 18px;
+  height: 18px;
+}
+
+#xbybody .media-server-workspace .detail-action-plus {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+#xbybody .media-server-workspace .detail-hero-main {
+  min-height: 242px !important;
+  max-width: none !important;
+  justify-content: flex-end !important;
+  gap: 0 !important;
+}
+
+#xbybody .media-server-workspace .detail-synopsis-column {
+  width: min(100%, 1240px) !important;
+  max-width: none !important;
+  gap: 10px !important;
+  justify-content: flex-end !important;
+}
+
+#xbybody .media-server-workspace .detail-episode-heading {
+  color: var(--detail-copy) !important;
+  font-size: clamp(18px, 1.45vw, 28px) !important;
+  line-height: 1.28 !important;
+  font-weight: 780 !important;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.52) !important;
+}
+
+#xbybody .media-server-workspace .detail-facts-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 13px;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 650;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+#xbybody .media-server-workspace .detail-facts-line .detail-meta-badge {
+  padding: 1px 6px !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  border-radius: 4px !important;
+  color: rgba(255, 255, 255, 0.82) !important;
+  background: transparent !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+}
+
+#xbybody .media-server-workspace .detail-overview-block {
+  padding: 0 !important;
+}
+
+#xbybody .media-server-workspace .detail-overview {
+  max-width: 1280px;
+  color: rgba(255, 255, 255, 0.84) !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  font-weight: 520 !important;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5) !important;
+  -webkit-line-clamp: 2 !important;
+}
+
+#xbybody .media-server-workspace .detail-score-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 13px;
+}
+
+#xbybody .media-server-workspace .detail-score-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex: 0 0 24px;
+}
+
+#xbybody .media-server-workspace .detail-lower-content {
+  display: flex !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  padding: 16px 34px 30px !important;
+  color: var(--detail-copy) !important;
+  background: var(--detail-surface) !important;
+}
+
+#xbybody .media-server-workspace .detail-section {
+  margin: 0 0 24px !important;
+}
+
+#xbybody .media-server-workspace .detail-section-episodes { order: 1; }
+#xbybody .media-server-workspace .detail-section-people { order: 2; }
+#xbybody .media-server-workspace .detail-section-media { order: 3; }
+#xbybody .media-server-workspace .detail-section-similar { order: 4; }
+#xbybody .media-server-workspace .detail-section-genres { order: 5; }
+#xbybody .media-server-workspace .detail-section-studios { order: 6; }
+#xbybody .media-server-workspace .detail-section-links { order: 7; }
+
+#xbybody .media-server-workspace .detail-section-header {
+  min-height: 24px;
+  margin-bottom: 10px !important;
+}
+
+#xbybody .media-server-workspace .detail-section-header h4 {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 15px !important;
+  line-height: 1.35 !important;
+  font-weight: 760 !important;
+}
+
+#xbybody .media-server-workspace .detail-section-episodes > .detail-section-header h4::after {
+  content: '⌄';
+  display: inline-block;
+  margin-left: 5px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 13px;
+}
+
+#xbybody .media-server-workspace .detail-season-picker {
+  margin-bottom: 10px !important;
+  gap: 8px !important;
+}
+
+#xbybody .media-server-workspace .detail-chip-button,
+#xbybody .media-server-workspace .detail-chip-link {
+  min-height: 30px !important;
+  padding: 5px 11px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 999px !important;
+  color: rgba(255, 255, 255, 0.68) !important;
+  background: #242424 !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+}
+
+#xbybody .media-server-workspace .detail-chip-button.active {
+  color: #fff !important;
+  border-color: var(--detail-accent) !important;
+  background: rgba(255, 122, 0, 0.12) !important;
+}
+
+#xbybody .media-server-workspace .detail-episodes-rail,
+#xbybody .media-server-workspace .detail-recommendation-rail,
+#xbybody .media-server-workspace .detail-people-rail {
+  gap: 12px !important;
+  padding: 2px 0 8px !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+#xbybody .media-server-workspace .detail-episode-card {
+  width: clamp(150px, 12vw, 250px) !important;
+}
+
+#xbybody .media-server-workspace .detail-episode-cover {
+  height: auto !important;
+  aspect-ratio: 16 / 9 !important;
+  border-radius: 14px !important;
+  background: #262626 !important;
+  box-shadow: none !important;
+}
+
+#xbybody .media-server-workspace .detail-episode-card.selected .detail-episode-cover {
+  outline: 3px solid var(--detail-accent) !important;
+  outline-offset: -3px !important;
+}
+
+#xbybody .media-server-workspace .detail-episode-selected-badge {
+  top: 0 !important;
+  right: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-radius: 0 !important;
+  border-top: 32px solid var(--detail-accent) !important;
+  border-left: 32px solid transparent !important;
+  background: transparent !important;
+}
+
+#xbybody .media-server-workspace .detail-episode-selected-badge span {
+  display: none !important;
+}
+
+#xbybody .media-server-workspace .detail-episode-caption {
+  min-width: 0;
+  margin-top: 7px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+#xbybody .media-server-workspace .detail-episode-index,
+#xbybody .media-server-workspace .detail-episode-kicker,
+#xbybody .media-server-workspace .detail-episode-title {
+  margin: 0 !important;
+  min-height: 0 !important;
+  color: inherit !important;
+  font: inherit !important;
+  display: inline !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+
+#xbybody .media-server-workspace .detail-episode-title {
+  min-width: 0;
+  overflow: hidden !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-server-workspace .detail-section-people {
+  margin-top: 3px !important;
+}
+
+#xbybody .media-server-workspace .person-card.person-card-rail {
+  width: 82px !important;
+  min-width: 82px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: rgba(255, 255, 255, 0.86) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left !important;
+}
+
+#xbybody .media-server-workspace .person-card.person-card-button:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+#xbybody .media-server-workspace .person-avatar {
+  width: 72px !important;
+  height: 72px !important;
+  margin: 0 0 7px !important;
+  border-radius: 16px !important;
+  background: #262626 !important;
+}
+
+#xbybody .media-server-workspace .person-name {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86) !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  font-weight: 650 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-server-workspace .person-role {
+  margin-top: 2px !important;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.48) !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-server-workspace .detail-section-media {
+  display: flex;
+  flex-direction: column;
+}
+
+#xbybody .media-server-workspace .detail-section-media > .detail-section-header {
+  display: none !important;
+}
+
+#xbybody .media-server-workspace .detail-file-bar {
+  order: 0;
+  margin: 3px 0 0 !important;
+  padding: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 24px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left !important;
+}
+
+#xbybody .media-server-workspace .detail-file-source {
+  grid-column: 1;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+#xbybody .media-server-workspace .detail-file-name {
+  grid-column: 1;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.48) !important;
+  font-size: 11px !important;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-server-workspace .detail-file-meta {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: end;
+  color: rgba(255, 255, 255, 0.52) !important;
+  font-size: 11px !important;
+  white-space: nowrap;
+}
+
+#xbybody .media-server-workspace .detail-media-card-rail {
+  order: 1;
+  margin-top: 26px;
+  padding-top: 8px !important;
+}
+
+#xbybody .media-server-workspace .detail-media-card {
+  min-height: 190px !important;
+  background: #222 !important;
+}
+
+@media (max-width: 980px) {
+  #xbybody .media-server-workspace .detail-backdrop-stage {
+    min-height: 760px !important;
+  }
+
+  #xbybody .media-server-workspace .detail-overlay-grid {
+    grid-template-columns: 218px minmax(0, 1fr) !important;
+    column-gap: 24px !important;
+  }
+
+  #xbybody .media-server-workspace .detail-icon-actions {
+    gap: 10px !important;
+  }
+
+  #xbybody .media-server-workspace .detail-square-action {
+    width: auto !important;
+    height: 38px !important;
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 720px) {
+  #xbybody .media-server-workspace .detail-backdrop-stage {
+    min-height: 840px !important;
+  }
+
+  #xbybody .media-server-workspace .detail-hero-copy {
+    padding: 0 20px 28px !important;
+  }
+
+  #xbybody .media-server-workspace .detail-overlay-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    row-gap: 24px !important;
+  }
+
+  #xbybody .media-server-workspace .detail-hero-controls,
+  #xbybody .media-server-workspace .detail-hero-main {
+    min-height: 0 !important;
+  }
+
+  #xbybody .media-server-workspace .detail-title-block-brand {
+    min-height: 0;
+  }
+
+  #xbybody .media-server-workspace .detail-actions-column {
+    max-width: 270px !important;
+  }
+
+  #xbybody .media-server-workspace .detail-lower-content {
+    padding: 16px 20px 28px !important;
+  }
+
+  #xbybody .media-server-workspace .detail-file-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #xbybody .media-server-workspace .detail-file-meta {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 </style>

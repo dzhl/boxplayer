@@ -3,6 +3,7 @@ import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount, nextTick
 import { useSettingStore } from '../store'
 import { useMediaLibraryStore } from '../store/medialibrary'
 import type { MediaLibraryItem, MediaCollectionMovie, MediaSeason, MediaEpisode, CastMember, CrewMember, DriveFileItem } from '../types/media'
+import type { MediaServerMediaInfoCard } from '../types/mediaServerContent'
 import type { IAliGetFileModel } from '../aliapi/alimodels'
 import type { IPageVideoPlaylistEntry } from '../store/appstore'
 import DownDAL from '../down/DownDAL'
@@ -16,6 +17,7 @@ import { getMediaCoverage } from '../utils/mediaCoverage'
 import { listMediaAcquisitionTracking } from '../services/mediaAcquisition/client'
 import type { MediaAcquisitionTrackingItem } from '@shared/types/mediaAcquisition'
 import MediaMetadataEditorModal from './MediaMetadataEditorModal.vue'
+import tmdbVerticalLogo from '../assets/media-server/tmdb_vertical_logo.svg'
 
 // Props
 const props = defineProps<{
@@ -41,11 +43,13 @@ const activeMediaItem = computed<MediaLibraryItem>(() => (props.mediaItem.collec
 const selectedSeason = ref(activeMediaItem.value.type === 'tv' && activeMediaItem.value.seasons?.length ? activeMediaItem.value.seasons[0].seasonNumber : 1)
 const selectedEpisode = ref<number>()
 const hasUserSelectedEpisode = ref(false)
+const selectedDriveFileId = ref('')
 watch(() => props.mediaItem, () => {
   selectedCollectionMovieId.value = undefined
   selectedSeason.value = activeMediaItem.value.type === 'tv' && activeMediaItem.value.seasons?.length ? activeMediaItem.value.seasons[0].seasonNumber : 1
   selectedEpisode.value = undefined
   hasUserSelectedEpisode.value = false
+  selectedDriveFileId.value = ''
 })
 const handleCollectionMovieSelect = (movie: MediaCollectionMovie) => {
   selectedCollectionMovieId.value = movie.tmdbId
@@ -209,31 +213,21 @@ const totalEpisodeCount = computed(() => {
 })
 
 const currentFilePath = computed(() => {
-  if (activeMediaItem.value.type === 'tv') {
-    return currentEpisode.value?.driveFiles?.[0]?.path || ''
-  }
-
-  return activeMediaItem.value.driveFiles?.[0]?.path || ''
+  return selectedDriveFile.value?.path || ''
 })
 
 const currentFileName = computed(() => {
-  if (activeMediaItem.value.type === 'tv') {
-    return currentEpisode.value?.driveFiles?.[0]?.name || ''
-  }
-  return activeMediaItem.value.driveFiles?.[0]?.name || ''
+  return selectedDriveFile.value?.name || ''
 })
 
 const currentDownloadFile = computed(() => {
-  if (activeMediaItem.value.type === 'tv') {
-    return currentEpisode.value?.driveFiles?.[0] || null
-  }
-  return activeMediaItem.value.driveFiles?.[0] || null
+  return selectedDriveFile.value || null
 })
 
 const backgroundStyle = computed(() => {
   if (activeMediaItem.value.backdropUrl) {
     return {
-      backgroundImage: `url(${activeMediaItem.value.backdropUrl})`,
+      backgroundImage: `url(${JSON.stringify(activeMediaItem.value.backdropUrl)})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center top',
       backgroundRepeat: 'no-repeat'
@@ -263,6 +257,145 @@ const currentEpisode = computed(() => {
   )
   return selected || currentSeasonEpisodes.value[0] || null
 })
+
+const detailVersionFiles = computed<DriveFileItem[]>(() => {
+  if (activeMediaItem.value.type === 'tv') return currentEpisode.value?.driveFiles || []
+  return activeMediaItem.value.driveFiles || []
+})
+
+const selectedDriveFile = computed<DriveFileItem | undefined>(() => {
+  return detailVersionFiles.value.find(file => file.id === selectedDriveFileId.value) || detailVersionFiles.value[0]
+})
+
+const formatMediaFileSize = (value?: number) => {
+  if (!value || value <= 0) return ''
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let current = value
+  let unitIndex = 0
+  while (current >= 1024 && unitIndex < units.length - 1) {
+    current /= 1024
+    unitIndex += 1
+  }
+  const precision = current >= 10 ? 1 : 2
+  return `${current.toFixed(precision).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1')}${units[unitIndex]}`
+}
+
+const mediaFileExtension = (name: string) => {
+  const match = name.match(/\.([^.]+)$/)
+  return match?.[1]?.toUpperCase() || ''
+}
+
+const inferVideoCodec = (name: string) => {
+  if (/\b(?:hevc|h[ ._-]?265|x265)\b/i.test(name)) return 'HEVC'
+  if (/\b(?:avc|h[ ._-]?264|x264)\b/i.test(name)) return 'H.264'
+  if (/\bav1\b/i.test(name)) return 'AV1'
+  if (/\bvp9\b/i.test(name)) return 'VP9'
+  return ''
+}
+
+const inferVideoRange = (name: string) => {
+  if (/\b(?:dolby[ ._-]?vision|dovi|dv)\b/i.test(name)) return 'Dolby Vision'
+  if (/\bhdr10\+?\b/i.test(name)) return 'HDR10'
+  if (/\bhdr\b/i.test(name)) return 'HDR'
+  return 'SDR'
+}
+
+const inferVideoResolution = (file: DriveFileItem) => {
+  const fromName = file.name.match(/\b(2160|1440|1080|720|576|480)p\b/i)?.[1]
+  const height = Number(file.height || fromName || 0)
+  return height > 0 ? `${height}p` : ''
+}
+
+const formatMediaDuration = (value?: string) => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  if (raw.includes(':')) return raw
+  const seconds = Number(raw)
+  if (!Number.isFinite(seconds) || seconds <= 0) return raw
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainingSeconds = Math.floor(seconds % 60)
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
+    : `${minutes}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
+const inferSubtitleLanguage = (name: string) => {
+  if (/(?:^|[. _-])(?:zh|zho|chi|chs|cht|简中|繁中|中文)(?:[. _-]|$)/i.test(name)) return '中文'
+  if (/(?:^|[. _-])(?:en|eng|english)(?:[. _-]|$)/i.test(name)) return '英语'
+  if (/(?:^|[. _-])(?:ja|jpn|japanese)(?:[. _-]|$)/i.test(name)) return '日语'
+  if (/(?:^|[. _-])(?:ko|kor|korean)(?:[. _-]|$)/i.test(name)) return '韩语'
+  return '未知'
+}
+
+const cloudDriveLabel = (file: DriveFileItem) => {
+  const drive = [file.driveServerId, file.driveId, file.cloudType].filter(Boolean).join(' ').toLowerCase()
+  if (drive.includes('local')) return '本地媒体库'
+  if (drive.includes('115')) return '115 网盘'
+  if (drive.includes('123')) return '123 云盘'
+  if (drive.includes('baidu')) return '百度网盘'
+  if (drive.includes('quark')) return '夸克网盘'
+  if (drive.includes('pikpak')) return 'PikPak'
+  if (drive.includes('dropbox')) return 'Dropbox'
+  if (drive.includes('onedrive')) return 'OneDrive'
+  if (drive.includes('box')) return 'Box'
+  if (drive.includes('139')) return '中国移动云盘'
+  if (drive.includes('189')) return '天翼云盘'
+  return '阿里云盘'
+}
+
+const detailMediaInfoCards = computed<MediaServerMediaInfoCard[]>(() => {
+  const file = selectedDriveFile.value
+  if (!file) return []
+
+  const container = mediaFileExtension(file.name)
+  const codec = inferVideoCodec(file.name)
+  const resolution = inferVideoResolution(file)
+  const videoRange = inferVideoRange(file.name)
+  const videoTitle = [resolution.toUpperCase(), codec, videoRange !== 'SDR' ? videoRange : ''].filter(Boolean).join(' · ') || file.name
+  const videoRows: Array<[string, string]> = [
+    ['Codec', codec],
+    ['分辨率', resolution],
+    ['Video range', videoRange],
+    ['容器', container],
+    ['时长', formatMediaDuration(file.videoDuration)],
+    ['文件大小', formatMediaFileSize(file.fileSize)],
+    ['来源', cloudDriveLabel(file)]
+  ].filter((row): row is [string, string] => !!row[1])
+
+  const cards: MediaServerMediaInfoCard[] = [{
+    id: `video:${file.id}`,
+    kind: 'video',
+    title: videoTitle,
+    selected: true,
+    rows: videoRows.map(([label, value]) => ({ label, value }))
+  }]
+
+  const seenSubtitleIds = new Set<string>()
+  for (const [index, subtitle] of (file.subtitleFiles || []).entries()) {
+    const id = subtitle.id || subtitle.path || subtitle.name || String(index)
+    if (seenSubtitleIds.has(id)) continue
+    seenSubtitleIds.add(id)
+    const subtitleFormat = mediaFileExtension(subtitle.name)
+    cards.push({
+      id: `subtitle:${id}`,
+      kind: 'subtitle',
+      title: subtitle.name || `字幕 ${index + 1}`,
+      rows: [
+        { label: '语言', value: inferSubtitleLanguage(subtitle.name) },
+        ...(subtitleFormat ? [{ label: 'Codec', value: subtitleFormat }] : []),
+        { label: '外部', value: '是' },
+        ...(formatMediaFileSize(subtitle.fileSize) ? [{ label: '文件大小', value: formatMediaFileSize(subtitle.fileSize) }] : []),
+        { label: '来源', value: cloudDriveLabel(subtitle) }
+      ]
+    })
+  }
+  return cards
+})
+
+watch(detailVersionFiles, (files) => {
+  if (!files.some(file => file.id === selectedDriveFileId.value)) selectedDriveFileId.value = files[0]?.id || ''
+}, { immediate: true })
 
 const castList = computed(() => {
   const item = activeMediaItem.value as MediaLibraryItem & {
@@ -308,7 +441,9 @@ const currentEpisodeRecord = computed(() => {
 const playProgressPercent = computed(() => {
   if (activeMediaItem.value.type === 'tv') {
     const episode = currentEpisode.value
-    const progress = currentEpisodeRecord.value?.watchProgress ?? 0
+    const record = currentEpisodeRecord.value
+    if (!record) return null
+    const progress = record.watchProgress
     if (progress === undefined || progress === null) return null
     return Math.max(0, Math.min(100, Math.round(progress * 100)))
   }
@@ -341,6 +476,14 @@ const playEpisodeInfo = computed(() => {
   const fileName = currentFileName.value || ''
   const title = `将播放：S${episode.seasonNumber}E${episode.episodeNumber} ${episode.name || ''}`.trim()
   return fileName ? `${title} · ${fileName}` : title
+})
+
+const detailHeading = computed(() => {
+  const episode = currentEpisode.value
+  if (activeMediaItem.value.type === 'tv' && episode) {
+    return `第 ${episode.episodeNumber} 集 · S${episode.seasonNumber}E${episode.episodeNumber} · ${episode.name}`
+  }
+  return activeMediaItem.value.name
 })
 
 const currentPlaylistItemId = computed(() => {
@@ -501,7 +644,7 @@ const currentPlaylistEntries = computed<IPageVideoPlaylistEntry[]>(() => {
 
 const playEpisode = (episode: MediaEpisode) => {
   if (episode.driveFiles && episode.driveFiles.length > 0) {
-    const driveFile = episode.driveFiles[0]
+    const driveFile = episode.driveFiles.find(file => file.id === selectedDriveFileId.value) || episode.driveFiles[0]
     const aliFile = buildAliFileModel(driveFile)
     menuOpenFile(aliFile, '', {
       customPlaylistLabel: props.activePlaylistName || '',
@@ -512,7 +655,7 @@ const playEpisode = (episode: MediaEpisode) => {
 
 const playMovie = () => {
   if (activeMediaItem.value.driveFiles && activeMediaItem.value.driveFiles.length > 0) {
-    const driveFile = activeMediaItem.value.driveFiles[0]
+    const driveFile = activeMediaItem.value.driveFiles.find(file => file.id === selectedDriveFileId.value) || activeMediaItem.value.driveFiles[0]
     const aliFile = buildAliFileModel(driveFile)
     menuOpenFile(aliFile, '', {
       customPlaylistLabel: props.activePlaylistName || '',
@@ -673,11 +816,12 @@ const getCastInitial = (name?: string): string => {
           </div>
 
           <div class="hero-info">
-            <h1 class="hero-title">{{ activeMediaItem.name }}</h1>
+            <h1 class="hero-title">{{ detailHeading }}</h1>
 
             <div class="hero-meta">
               <span v-if="activeMediaItem.rating" class="meta-rating">
-                ★ {{ activeMediaItem.rating.toFixed(1) }}
+                <img class="meta-rating-logo" :src="tmdbVerticalLogo" alt="TMDB" />
+                <strong>{{ activeMediaItem.rating.toFixed(1) }}</strong>
               </span>
               <span v-if="activeMediaItem.genres.length" class="meta-genres">
                 {{ activeMediaItem.genres.slice(0, 3).join(' · ') }}
@@ -707,8 +851,42 @@ const getCastInitial = (name?: string): string => {
             </div>
 
             <div class="hero-actions">
+              <div class="hero-brand-title">{{ activeMediaItem.name }}</div>
               <div class="actions-stack">
                 <div v-if="playEpisodeInfo" class="play-episode-info">{{ playEpisodeInfo }}</div>
+                <div class="play-row">
+                  <button
+                    type="button"
+                    class="play-button"
+                    @click="playMainContent"
+                  >
+                    <span
+                      v-if="playProgressPercent !== null"
+                      class="play-button-progress"
+                      :style="{ width: `${playProgressPercent}%` }"
+                    ></span>
+                    <span class="play-button-label">{{ playButtonLabel }}</span>
+                  </button>
+                  <a-dropdown v-if="detailVersionFiles.length" trigger="click" position="bl" popup-class="detail-version-popup">
+                    <button type="button" class="version-button" title="选择视频版本">
+                      <IconFont name="icondown" />
+                    </button>
+                    <template #content>
+                      <a-doption
+                        v-for="file in detailVersionFiles"
+                        :key="file.id"
+                        class="detail-version-option"
+                        @click="selectedDriveFileId = file.id"
+                      >
+                        <span class="detail-version-option-name">{{ file.name }}</span>
+                        <span v-if="selectedDriveFile?.id === file.id" class="detail-version-option-current">当前</span>
+                      </a-doption>
+                    </template>
+                  </a-dropdown>
+                  <button v-else type="button" class="version-button" title="暂无视频版本" disabled>
+                    <IconFont name="icondown" />
+                  </button>
+                </div>
                 <div ref="actionButtonsRef" class="action-buttons">
                   <button
                     type="button"
@@ -717,7 +895,15 @@ const getCastInitial = (name?: string): string => {
                     :title="isWatched ? '标记为未观看' : '标记为已观看'"
                     @click="toggleWatched"
                   >
-                    <span class="action-glyph">✓</span>
+                    <IconFont name="iconchakan" />
+                  </button>
+                  <button
+                    type="button"
+                    class="action-button"
+                    title="下载"
+                    @click="handleDownloadCurrent"
+                  >
+                    <IconFont name="icondownload" />
                   </button>
                   <button
                     type="button"
@@ -726,70 +912,39 @@ const getCastInitial = (name?: string): string => {
                     :title="isFavorited ? '取消收藏' : '收藏'"
                     @click="toggleFavorite"
                   >
-                    <span class="action-glyph">{{ isFavorited ? '♥' : '♡' }}</span>
+                    <IconFont name="iconstar" :fill="isFavorited ? 'currentColor' : 'none'" />
                   </button>
-                  <a-dropdown trigger="click" position="bl" popup-class="detail-more-action-popup">
-                    <button
-                      type="button"
-                      class="action-button"
-                      :class="{ active: inPlaylist }"
-                      title="更多操作"
-                      @click.stop.prevent
-                    >
-                      <span class="action-glyph">⋯</span>
-                    </button>
-                    <template #content>
-                      <div class="detail-more-action-menu">
-                        <button type="button" class="detail-more-action-item" @click.stop="togglePlaylist">
-                          <span>≡</span>
-                          <span>添加到播放列表</span>
-                        </button>
-                        <template v-if="mediaCoverage || trackingRequest">
-                          <div class="detail-more-action-divider" />
-                          <button v-if="mediaCoverage" type="button" class="detail-more-action-item accent" @click.stop="handleCompleteMissing">
-                            <span>+</span>
-                            <span>一键补全</span>
-                          </button>
-                          <button v-if="trackingRequest" type="button" class="detail-more-action-item accent" @click.stop="handleStartTracking">
-                            <span>↻</span>
-                            <span>{{ currentSeasonTracked ? '管理追更' : '追更本季' }}</span>
-                          </button>
-                        </template>
-                      </div>
-                    </template>
-                  </a-dropdown>
                   <button
                     type="button"
                     class="action-button"
                     title="编辑元数据"
                     @click.stop.prevent="metadataEditorVisible = true"
                   >
-                    <span class="action-glyph">✎</span>
+                    <IconFont name="iconedit-square" />
                   </button>
+                  <a-dropdown v-if="mediaCoverage || trackingRequest" trigger="click" position="bl" popup-class="detail-more-action-popup">
+                    <button
+                      type="button"
+                      class="action-button"
+                      title="更多操作"
+                      @click.stop.prevent
+                    >
+                      <IconFont name="icongengduo" />
+                    </button>
+                    <template #content>
+                      <div class="detail-more-action-menu">
+                        <button v-if="mediaCoverage" type="button" class="detail-more-action-item accent" @click.stop="handleCompleteMissing">
+                          <span>+</span>
+                          <span>一键补全</span>
+                        </button>
+                        <button v-if="trackingRequest" type="button" class="detail-more-action-item accent" @click.stop="handleStartTracking">
+                          <span>↻</span>
+                          <span>{{ currentSeasonTracked ? '管理追更' : '追更本季' }}</span>
+                        </button>
+                      </div>
+                    </template>
+                  </a-dropdown>
                 </div>
-                <button
-                  type="button"
-                  class="play-button"
-                  @click="playMainContent"
-                >
-                  <span
-                    v-if="playProgressPercent !== null"
-                    class="play-button-progress"
-                    :style="{ width: `${playProgressPercent}%` }"
-                  ></span>
-                  <span class="play-button-label">
-                    <span class="play-glyph">▶</span>
-                    {{ playButtonLabel }}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  class="download-button"
-                  @click="handleDownloadCurrent"
-                >
-                  <span class="play-glyph">↓</span>
-                  <span>下载</span>
-                </button>
               </div>
             </div>
           </div>
@@ -851,7 +1006,7 @@ const getCastInitial = (name?: string): string => {
             v-for="episode in currentSeasonEpisodes"
             :key="episode.id"
             class="episode-card"
-            :class="{ active: selectedEpisode === episode.episodeNumber }"
+            :class="{ active: currentEpisode?.episodeNumber === episode.episodeNumber }"
           >
             <div class="episode-thumbnail">
               <img
@@ -879,6 +1034,60 @@ const getCastInitial = (name?: string): string => {
               </div>
               <p class="episode-name">{{ episode.overview || '' }}</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 标签元数据：与演员区保持纵向信息层级 -->
+      <div class="tags-section metadata-tags-section">
+        <div v-if="activeMediaItem.genres && activeMediaItem.genres.length" class="tag-group">
+          <h4 class="tag-group-title">类型</h4>
+          <div class="tag-list">
+            <span
+              v-for="genre in activeMediaItem.genres"
+              :key="genre"
+              class="tag-item clickable"
+              @click="handleTagClick('genre', genre)"
+            >
+              {{ genre }}
+            </span>
+          </div>
+        </div>
+
+        <div v-if="productionCompanies.length" class="tag-group">
+          <h4 class="tag-group-title">工作室</h4>
+          <div class="tag-list">
+            <span
+              v-for="company in productionCompanies"
+              :key="company.id"
+              class="tag-item clickable"
+              @click="handleTagClick('studio', company.name)"
+            >
+              {{ company.name }}
+            </span>
+          </div>
+        </div>
+
+        <div v-if="activeMediaItem.year" class="tag-group">
+          <h4 class="tag-group-title">制作年份</h4>
+          <div class="tag-list">
+            <span class="tag-item clickable" @click="handleTagClick('year', activeMediaItem.year)">
+              {{ activeMediaItem.year }}s
+            </span>
+          </div>
+        </div>
+
+        <div v-if="productionCountries.length" class="tag-group">
+          <h4 class="tag-group-title">地区</h4>
+          <div class="tag-list">
+            <span
+              v-for="country in productionCountries"
+              :key="country.iso31661"
+              class="tag-item clickable"
+              @click="handleTagClick('country', country.name)"
+            >
+              {{ country.name }}
+            </span>
           </div>
         </div>
       </div>
@@ -911,99 +1120,72 @@ const getCastInitial = (name?: string): string => {
         </div>
       </div>
 
-      <!-- 标签区域 -->
-      <div class="tags-section">
-        <!-- 类型标签 -->
-        <div v-if="activeMediaItem.genres && activeMediaItem.genres.length" class="tag-group">
-          <h4 class="tag-group-title">类型</h4>
-          <div class="tag-list">
-            <span
-              v-for="genre in activeMediaItem.genres"
-              :key="genre"
-              class="tag-item clickable"
-              @click="handleTagClick('genre', genre)"
-            >
-              {{ genre }}
-            </span>
-          </div>
+      <section v-if="detailMediaInfoCards.length" class="scraped-media-info-section">
+        <div class="section-header scraped-media-info-header">
+          <h3>媒体</h3>
+        </div>
+        <div v-if="selectedDriveFile" class="detail-file-bar">
+          <div class="detail-file-source">在 {{ cloudDriveLabel(selectedDriveFile) }} 上</div>
+          <div class="detail-file-name" :title="selectedDriveFile.path">{{ selectedDriveFile.name }}</div>
+          <div v-if="formatMediaFileSize(selectedDriveFile.fileSize)" class="detail-file-meta">{{ formatMediaFileSize(selectedDriveFile.fileSize) }}</div>
         </div>
 
-        <!-- 工作室标签 -->
-        <div v-if="productionCompanies.length" class="tag-group">
-          <h4 class="tag-group-title">工作室</h4>
-          <div class="tag-list">
-            <span
-              v-for="company in productionCompanies"
-              :key="company.id"
-              class="tag-item clickable"
-              @click="handleTagClick('studio', company.name)"
-            >
-              {{ company.name }}
-            </span>
+        <div class="detail-media-card-rail">
+          <article
+            v-for="card in detailMediaInfoCards"
+            :key="card.id"
+            class="detail-media-card"
+            :class="[{ selected: card.selected }, `detail-media-card-${card.kind}`]"
+            :data-media-kind="card.kind"
+          >
+            <div v-if="card.selected" class="detail-media-card-selected-badge">
+              <IconFont name="iconcheck" />
+            </div>
+            <div class="detail-media-card-title">
+              <div class="detail-media-card-heading">
+                <span class="detail-media-kind-badge">{{ card.kind === 'video' ? '影' : '字' }}</span>
+                <span class="detail-media-card-title-text" :title="card.title">{{ card.title }}</span>
+              </div>
+            </div>
+            <div class="detail-media-card-body">
+              <div v-for="row in card.rows" :key="`${card.id}-${row.label}`" class="detail-media-row">
+                <span>{{ row.label }}</span>
+                <strong :title="row.value">{{ row.value }}</strong>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="details-section">
+        <h4 class="tag-group-title">详细信息</h4>
+        <div class="details-card">
+          <div v-if="activeMediaItem.year" class="detail-row">
+            <span class="detail-label">年份</span>
+            <span class="detail-value">{{ activeMediaItem.year }}</span>
+          </div>
+
+          <div v-if="activeMediaItem.rating" class="detail-row">
+            <span class="detail-label">评分</span>
+            <span class="detail-value">{{ activeMediaItem.rating.toFixed(1) }}/10</span>
+          </div>
+
+          <div v-if="detailVersionFiles.length" class="detail-row">
+            <span class="detail-label">文件</span>
+            <span class="detail-value">{{ detailVersionFiles.length }} 个文件</span>
+          </div>
+
+          <div v-if="activeMediaItem.addedAt" class="detail-row">
+            <span class="detail-label">添加时间</span>
+            <span class="detail-value">{{ new Date(activeMediaItem.addedAt).toLocaleDateString() }}</span>
+          </div>
+
+          <div v-if="currentFilePath" class="detail-row" :title="currentFilePath">
+            <span class="detail-label">文件路径</span>
+            <span class="detail-value detail-path">{{ currentFilePath }}</span>
           </div>
         </div>
-
-        <!-- 制作年份标签 -->
-        <div v-if="activeMediaItem.year" class="tag-group">
-          <h4 class="tag-group-title">制作年份</h4>
-          <div class="tag-list">
-            <span
-              class="tag-item clickable"
-              @click="handleTagClick('year', activeMediaItem.year)"
-            >
-              {{ activeMediaItem.year }}s
-            </span>
-          </div>
-        </div>
-
-        <!-- 地区标签 -->
-        <div v-if="productionCountries.length" class="tag-group">
-          <h4 class="tag-group-title">地区</h4>
-          <div class="tag-list">
-            <span
-              v-for="country in productionCountries"
-              :key="country.iso31661"
-              class="tag-item clickable"
-              @click="handleTagClick('country', country.name)"
-            >
-              {{ country.name }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 详细信息卡片 -->
-        <div class="tag-group">
-          <h4 class="tag-group-title">详细信息</h4>
-          <div class="details-card">
-            <div v-if="activeMediaItem.year" class="detail-row">
-              <span class="detail-label">年份</span>
-              <span class="detail-value">{{ activeMediaItem.year }}</span>
-            </div>
-
-            <div v-if="activeMediaItem.rating" class="detail-row">
-              <span class="detail-label">评分</span>
-              <span class="detail-value">{{ activeMediaItem.rating.toFixed(1) }}/10</span>
-            </div>
-
-            <div v-if="activeMediaItem.driveFiles?.length" class="detail-row">
-              <span class="detail-label">文件</span>
-              <span class="detail-value">{{ activeMediaItem.driveFiles.length }} 个文件</span>
-            </div>
-
-            <div v-if="activeMediaItem.addedAt" class="detail-row">
-              <span class="detail-label">添加时间</span>
-              <span class="detail-value">{{ new Date(activeMediaItem.addedAt).toLocaleDateString() }}</span>
-            </div>
-
-            <div v-if="currentFilePath" class="detail-row" :title="currentFilePath">
-              <span class="detail-label">文件路径</span>
-              <span class="detail-value detail-path">{{ currentFilePath }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 国家标签 -->
-      </div>
+      </section>
     </div>
 
     <MediaMetadataEditorModal
@@ -2229,6 +2411,791 @@ const getCastInitial = (name?: string): string => {
   .details-card {
     width: 100%;
     min-height: auto;
+  }
+}
+
+</style>
+
+<style lang="less">
+/* Cinematic scraped-media detail, aligned with the media-server detail view. */
+#xbybody .media-detail {
+  --scraped-detail-surface: #191919;
+  --scraped-detail-soft: #2f2f2f;
+  --scraped-detail-copy: rgba(255, 255, 255, 0.94);
+  --scraped-detail-muted: rgba(255, 255, 255, 0.62);
+  --scraped-detail-accent: #ff7a00;
+  color: var(--scraped-detail-copy) !important;
+  background: var(--scraped-detail-surface) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+#xbybody .media-detail .detail-content {
+  color: var(--scraped-detail-copy);
+  background: var(--scraped-detail-surface) !important;
+}
+
+#xbybody .media-detail .detail-content::before {
+  display: none !important;
+}
+
+#xbybody .media-detail .detail-header {
+  height: 54px;
+  padding: 0 12px;
+  background: #191919;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+#xbybody .media-detail .detail-back,
+[arco-theme='dark'] #xbybody .media-detail .detail-back {
+  height: 54px;
+  max-width: min(520px, calc(100vw - 80px));
+  padding: 0;
+  gap: 12px;
+  border: 0;
+  border-radius: 0;
+  color: var(--scraped-detail-copy);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#xbybody .media-detail .detail-back:hover {
+  transform: none;
+  color: #fff;
+  background: transparent;
+  box-shadow: none;
+}
+
+#xbybody .media-detail .detail-back > .iconfont-svg {
+  width: 38px;
+  height: 38px;
+  padding: 9px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  background: #222;
+}
+
+#xbybody .media-detail .hero-section {
+  min-height: max(clamp(620px, 68vh, 940px), calc(30vw + 54px));
+  padding: 54px 0 0;
+  background-position: center 10% !important;
+  background-color: #242424 !important;
+}
+
+#xbybody .media-detail .hero-section::before,
+[arco-theme='dark'] #xbybody .media-detail .hero-section::before {
+  z-index: 0;
+  background:
+    linear-gradient(90deg, rgba(12, 12, 12, 0.16) 0%, rgba(12, 12, 12, 0.04) 48%, rgba(12, 12, 12, 0.14) 100%),
+    linear-gradient(180deg, rgba(12, 12, 12, 0.01) 0%, rgba(19, 19, 19, 0.03) 64%, rgba(25, 25, 25, 0.7) 87%, #191919 100%) !important;
+}
+
+#xbybody .media-detail .hero-section::after,
+[arco-theme='dark'] #xbybody .media-detail .hero-section::after {
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 32%;
+  filter: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(25, 25, 25, 0.38) 54%, #191919 100%) !important;
+}
+
+#xbybody .media-detail .hero-content {
+  width: calc(100% - 68px);
+  left: 34px;
+  bottom: 12px;
+  transform: none;
+  display: block;
+}
+
+#xbybody .media-detail .hero-poster {
+  display: none;
+}
+
+#xbybody .media-detail .hero-info {
+  width: 100%;
+  max-width: none;
+  min-height: 242px;
+  display: grid;
+  grid-template-columns: minmax(232px, 280px) minmax(0, 1fr);
+  grid-template-rows: repeat(5, auto);
+  column-gap: 34px;
+  row-gap: 9px;
+  align-items: end;
+  color: var(--scraped-detail-copy);
+}
+
+#xbybody .media-detail .hero-title,
+#xbybody .media-detail .hero-meta,
+#xbybody .media-detail .hero-meta-secondary,
+#xbybody .media-detail .hero-overview,
+#xbybody .media-detail .coverage-alert {
+  grid-column: 2;
+  margin: 0;
+}
+
+#xbybody .media-detail .hero-title {
+  grid-row: 1;
+  font-size: clamp(18px, 1.45vw, 28px);
+  line-height: 1.28;
+  font-weight: 780;
+  letter-spacing: 0;
+  color: var(--scraped-detail-copy) !important;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.52) !important;
+}
+
+#xbybody .media-detail .hero-meta {
+  grid-row: 5;
+  gap: 9px;
+  min-height: 24px;
+  color: var(--scraped-detail-muted) !important;
+  font-size: 13px;
+  font-weight: 650;
+  text-shadow: none;
+}
+
+#xbybody .media-detail .meta-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+#xbybody .media-detail .meta-rating-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex: 0 0 24px;
+}
+
+#xbybody .media-detail .hero-meta-secondary {
+  grid-row: 2;
+  gap: 8px;
+  color: var(--scraped-detail-muted) !important;
+  font-size: 12px;
+  font-weight: 650;
+  text-shadow: none;
+}
+
+#xbybody .media-detail .hero-meta-secondary span + span::before {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+#xbybody .media-detail .hero-overview {
+  grid-row: 3;
+  max-width: 1280px;
+  color: rgba(255, 255, 255, 0.84) !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-weight: 520;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5) !important;
+}
+
+#xbybody .media-detail .coverage-alert {
+  grid-row: 4;
+  padding: 7px 10px;
+  border-color: rgba(255, 176, 62, 0.26);
+  border-radius: 8px;
+  color: #ffd18a;
+  background: rgba(43, 27, 8, 0.64);
+}
+
+#xbybody .media-detail .hero-actions {
+  grid-column: 1;
+  grid-row: 1 / span 5;
+  align-self: end;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+}
+
+#xbybody .media-detail .hero-brand-title {
+  min-height: 74px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: flex-end;
+  color: #fff;
+  font-size: clamp(22px, 2vw, 34px);
+  line-height: 1.08;
+  font-weight: 900;
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.56);
+}
+
+#xbybody .media-detail .actions-stack {
+  gap: 12px;
+}
+
+#xbybody .media-detail .play-episode-info {
+  display: none;
+}
+
+#xbybody .media-detail .play-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 10px;
+}
+
+#xbybody .media-detail .play-button {
+  width: 100%;
+  height: 46px;
+  min-height: 46px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(25, 25, 25, 0.9);
+  background: rgba(231, 231, 235, 0.76);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#xbybody .media-detail .play-button:hover {
+  color: #111;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+#xbybody .media-detail .play-button-label {
+  font-size: 14px;
+  font-weight: 780;
+}
+
+#xbybody .media-detail .play-button-progress {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+#xbybody .media-detail .version-button {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(62, 62, 62, 0.94);
+  cursor: pointer;
+}
+
+#xbybody .media-detail .version-button:hover {
+  color: #fff;
+  background: #505050;
+}
+
+#xbybody .media-detail .version-button[disabled] {
+  opacity: 0.52;
+  cursor: default;
+}
+
+#xbybody .media-detail .version-button > .iconfont-svg {
+  width: 18px;
+  height: 18px;
+}
+
+#xbybody .media-detail .action-buttons {
+  width: max-content;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+#xbybody .media-detail .action-button,
+[arco-theme='dark'] #xbybody .media-detail .action-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(49, 49, 49, 0.94);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#xbybody .media-detail .action-button:hover,
+#xbybody .media-detail .action-button.active {
+  color: #fff;
+  background: #414141;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+#xbybody .media-detail .action-button > .iconfont-svg {
+  width: 18px;
+  height: 18px;
+}
+
+#xbybody .media-detail .download-button {
+  display: none;
+}
+
+#xbybody .media-detail .season-selector,
+#xbybody .media-detail .episodes-section,
+#xbybody .media-detail .cast-section,
+#xbybody .media-detail .tags-section {
+  width: calc(100% - 68px);
+  margin: 0 auto;
+  padding: 16px 0 8px;
+  color: var(--scraped-detail-copy);
+  background: var(--scraped-detail-surface);
+}
+
+#xbybody .media-detail .section-header {
+  justify-content: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#xbybody .media-detail .section-header h3,
+#xbybody .media-detail .tag-group-title {
+  margin: 0;
+  color: var(--scraped-detail-copy) !important;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+#xbybody .media-detail .episode-count,
+#xbybody .media-detail .cast-count,
+#xbybody .media-detail .more-link {
+  color: var(--scraped-detail-muted) !important;
+  font-size: 11px;
+}
+
+#xbybody .media-detail .episodes-grid {
+  gap: 14px;
+  padding: 2px 2px 10px;
+}
+
+#xbybody .media-detail .episode-card,
+[arco-theme='dark'] #xbybody .media-detail .episode-card {
+  flex: 0 0 180px;
+  width: 180px;
+  min-width: 180px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--scraped-detail-copy);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#xbybody .media-detail .episode-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+#xbybody .media-detail .episode-thumbnail {
+  border-radius: 14px;
+  background: #252525;
+  box-shadow: none;
+}
+
+#xbybody .media-detail .episode-card.active .episode-thumbnail {
+  outline: 3px solid var(--scraped-detail-accent);
+  outline-offset: -3px;
+}
+
+#xbybody .media-detail .episode-play-overlay {
+  display: none;
+}
+
+#xbybody .media-detail .episode-info {
+  padding: 8px 2px 2px;
+}
+
+#xbybody .media-detail .episode-title {
+  margin: 0 0 4px;
+  color: rgba(255, 255, 255, 0.86) !important;
+  font-size: 11px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-detail .episode-name {
+  color: rgba(255, 255, 255, 0.48) !important;
+  font-size: 10px;
+  line-height: 1.4;
+  -webkit-line-clamp: 1;
+}
+
+#xbybody .media-detail .cast-list {
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+#xbybody .media-detail .cast-card,
+[arco-theme='dark'] #xbybody .media-detail .cast-card {
+  flex: 0 0 72px;
+  width: 72px;
+  padding: 0;
+  gap: 7px;
+  align-items: flex-start;
+  border: 0;
+  border-radius: 0;
+  color: var(--scraped-detail-copy);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#xbybody .media-detail .cast-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+#xbybody .media-detail .cast-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  background: #252525;
+  box-shadow: none;
+}
+
+#xbybody .media-detail .cast-info {
+  text-align: left;
+}
+
+#xbybody .media-detail .cast-name {
+  color: rgba(255, 255, 255, 0.86) !important;
+  font-size: 11px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-detail .cast-role {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.48) !important;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+#xbybody .media-detail .tags-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 22px;
+  padding-top: 20px;
+  padding-bottom: 30px;
+}
+
+#xbybody .media-detail .metadata-tags-section {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 18px;
+  margin-bottom: 0;
+  padding-bottom: 16px;
+}
+
+#xbybody .media-detail .metadata-tags-section .tag-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+#xbybody .media-detail .tag-group {
+  margin: 0;
+}
+
+#xbybody .media-detail .tag-list {
+  margin-top: 10px;
+  gap: 8px;
+}
+
+#xbybody .media-detail .tag-item,
+[arco-theme='dark'] #xbybody .media-detail .tag-item {
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.76);
+  background: #242424;
+  box-shadow: none;
+  font-size: 11px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#xbybody .media-detail .details-card,
+[arco-theme='dark'] #xbybody .media-detail .details-card {
+  width: min(560px, 100%);
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  color: var(--scraped-detail-copy);
+  background: #222;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#xbybody .media-detail .detail-label,
+#xbybody .media-detail .detail-value,
+#xbybody .media-detail .detail-path {
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-size: 11px;
+}
+
+#xbybody .media-detail .details-section {
+  width: calc(100% - 68px);
+  margin: 0 auto;
+  padding: 8px 0 40px;
+  color: var(--scraped-detail-copy);
+  background: var(--scraped-detail-surface);
+}
+
+#xbybody .media-detail .details-section .details-card {
+  width: min(720px, 100%);
+}
+
+#xbybody .media-detail .scraped-media-info-section {
+  width: calc(100% - 68px);
+  margin: 0 auto;
+  padding: 4px 0 34px;
+  color: var(--scraped-detail-copy);
+  background: var(--scraped-detail-surface);
+}
+
+#xbybody .media-detail .scraped-media-info-header {
+  margin-bottom: 8px;
+}
+
+#xbybody .media-detail .detail-file-bar {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 24px;
+  border: 0;
+  border-radius: 0;
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+#xbybody .media-detail .detail-file-source {
+  grid-column: 1;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+#xbybody .media-detail .detail-file-name {
+  grid-column: 1;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-detail .detail-file-meta {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: end;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+#xbybody .media-detail .detail-media-card-rail {
+  margin-top: 26px;
+  padding: 8px 2px 12px;
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  scroll-padding-inline: 2px;
+}
+
+#xbybody .media-detail .detail-media-card {
+  position: relative;
+  width: 320px;
+  min-width: 320px;
+  min-height: 190px;
+  flex: 0 0 auto;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  color: var(--scraped-detail-copy);
+  background: #222;
+  box-shadow: none;
+}
+
+#xbybody .media-detail .detail-media-card.selected {
+  border-color: rgba(69, 119, 255, 0.42);
+  background: #252936;
+}
+
+#xbybody .media-detail .detail-media-card-selected-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #315be8;
+}
+
+#xbybody .media-detail .detail-media-card-selected-badge > .iconfont-svg {
+  width: 16px;
+  height: 16px;
+}
+
+#xbybody .media-detail .detail-media-card-title {
+  margin: 0 42px 16px 0;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 15px;
+  font-weight: 760;
+}
+
+#xbybody .media-detail .detail-media-card-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#xbybody .media-detail .detail-media-kind-badge {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+#xbybody .media-detail .detail-media-card-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#xbybody .media-detail .detail-media-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+#xbybody .media-detail .detail-media-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+#xbybody .media-detail .detail-media-row span,
+#xbybody .media-detail .detail-media-row strong {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+#xbybody .media-detail .detail-media-row span {
+  color: rgba(255, 255, 255, 0.48);
+  font-weight: 650;
+}
+
+#xbybody .media-detail .detail-media-row strong {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.76);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  #xbybody .media-detail .hero-section {
+    min-height: 760px;
+  }
+
+  #xbybody .media-detail .hero-info {
+    grid-template-columns: 218px minmax(0, 1fr);
+    column-gap: 24px;
+  }
+}
+
+@media (max-width: 720px) {
+  #xbybody .media-detail .hero-section {
+    min-height: 840px;
+  }
+
+  #xbybody .media-detail .hero-content,
+  #xbybody .media-detail .season-selector,
+  #xbybody .media-detail .episodes-section,
+  #xbybody .media-detail .cast-section,
+  #xbybody .media-detail .tags-section,
+  #xbybody .media-detail .scraped-media-info-section,
+  #xbybody .media-detail .details-section {
+    width: calc(100% - 40px);
+  }
+
+  #xbybody .media-detail .hero-content {
+    left: 20px;
+  }
+
+  #xbybody .media-detail .hero-info {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    row-gap: 14px;
+  }
+
+  #xbybody .media-detail .hero-title,
+  #xbybody .media-detail .hero-meta,
+  #xbybody .media-detail .hero-meta-secondary,
+  #xbybody .media-detail .hero-overview,
+  #xbybody .media-detail .coverage-alert,
+  #xbybody .media-detail .hero-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  #xbybody .media-detail .hero-actions {
+    max-width: 280px;
+  }
+
+  #xbybody .media-detail .detail-file-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #xbybody .media-detail .detail-file-meta {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 </style>

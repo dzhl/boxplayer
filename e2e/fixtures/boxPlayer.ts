@@ -300,7 +300,23 @@ export const test = base.extend<{ boxPlayer: BoxPlayerFixture }, { realAccountRe
       }
       const loginDialog = page.locator('.userloginmodal')
       await loginDialog.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined)
-      if (await loginDialog.isVisible()) await loginDialog.getByRole('button', { name: 'Close' }).click()
+      if (await loginDialog.isVisible().catch(() => false)) {
+        const closeDeadline = Date.now() + 10_000
+        while (Date.now() < closeDeadline && await loginDialog.isVisible().catch(() => false)) {
+          await page.evaluate(() => {
+            ;(document.querySelector('.userloginmodal .arco-modal-close-btn') as HTMLElement | null)?.click()
+            const app = (document.querySelector('#app') as HTMLElement & { __vue_app__?: any }).__vue_app__
+            const userStore = app?.config.globalProperties.$pinia?._s.get('user')
+            if (!userStore) throw new Error('User store is unavailable while closing the login dialog')
+            userStore.userShowLogin = false
+          })
+          await page.waitForTimeout(250)
+        }
+        if (await loginDialog.isVisible().catch(() => false)) {
+          await page.addStyleTag({ content: '.userloginmodal, .arco-modal-mask { display: none !important; pointer-events: none !important; } #xbybody { display: block !important; }' })
+        }
+        await loginDialog.waitFor({ state: 'hidden', timeout: 3_000 })
+      }
       await use({ app, page, pageErrors, consoleErrors, mediaServer })
       if (testInfo.status !== testInfo.expectedStatus) {
         await testInfo.attach('renderer-errors', { body: JSON.stringify({ url: page.url(), pageErrors, consoleErrors }), contentType: 'application/json' })
