@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest'
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
 describe('115 subtitle playback', () => {
-  it('routes every authenticated MPV quality through the MPV-only proxy without changing web playback', () => {
+  it('passes authenticated provider URLs and headers directly to MPV while retaining the proxy for encrypted playback', () => {
     const source = readSource('src/layout/PageVideo.vue')
 
-    expect(source).toContain('const useAuthenticatedMpvProxy = shouldProxyMpvPlayback(provider, defaultHeaders, Boolean(pageVideo.encType))')
-    expect(source).toContain('? resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || \'\', \'mpv\')')
+    expect(source).toContain('const useMpvProxy = shouldProxyMpvPlayback(Boolean(pageVideo.encType))')
+    expect(source).toContain('? resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || \'\')')
     expect(source).toContain(': defaultQuality.url')
     expect(source).toContain("const resolveRawMpvQualitySource = (data: IRawUrl")
     expect(source).toContain('const mpvHeaders = defaultUrl === defaultQuality.url ? defaultHeaders : undefined')

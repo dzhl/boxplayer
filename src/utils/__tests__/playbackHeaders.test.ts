@@ -47,11 +47,9 @@ describe('playback header contract', () => {
     expect(mergeMpvPlaybackHeaders('quark')).toBeUndefined()
   })
 
-  it('passes 139 signed CDN headers directly to MPV instead of using the local proxy', () => {
-    const headers = { 'User-Agent': 'BoxPlayer', Referer: 'https://yun.139.com/', Origin: 'https://yun.139.com' }
-
-    expect(shouldProxyMpvPlayback('139', headers)).toBe(false)
-    expect(shouldProxyMpvPlayback('quark', headers)).toBe(true)
-    expect(shouldProxyMpvPlayback('139', headers, true)).toBe(false)
+  it('keeps provider video streams direct and only proxies encrypted playback', () => {
+    expect(shouldProxyMpvPlayback()).toBe(false)
+    expect(shouldProxyMpvPlayback(false)).toBe(false)
+    expect(shouldProxyMpvPlayback(true)).toBe(true)
   })
 })

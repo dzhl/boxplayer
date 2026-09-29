@@ -10,12 +10,11 @@ export function hasPlaybackHeaders(headers?: PlaybackHeaders): boolean {
   return !!headers && Object.entries(headers).some(([key, value]) => Boolean(key.trim() && String(value || '').trim()))
 }
 
-export function shouldProxyMpvPlayback(provider: string, headers?: PlaybackHeaders, encrypted = false): boolean {
-  // 139 returns a signed CDN file URL whose User-Agent/Referer/Origin contract
-  // can be passed directly to libmpv. Wrapping it in the renderer HTTP proxy
-  // leaves native MPV stuck at 0:00 on macOS and can surface invalid content on
-  // Linux, even though the same proxy response is readable by Chromium.
-  return !encrypted && provider !== '139' && hasPlaybackHeaders(headers)
+export function shouldProxyMpvPlayback(encrypted = false): boolean {
+  // Native MPV accepts provider request headers directly. Keep ordinary cloud
+  // video streams on their signed/provider URL and reserve the local proxy for
+  // encrypted files, where the response body must actually be transformed.
+  return encrypted
 }
 
 /**

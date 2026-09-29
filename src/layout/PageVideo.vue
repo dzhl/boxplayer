@@ -2294,9 +2294,9 @@ const resolveRawMpvQualitySource = (data: IRawUrl, preferredQuality?: string): {
   // quality header object must never discard provider authentication.
   const provider = resolveDriveProvider(pageVideo.user_id, pageVideo.drive_id, pageVideo.tokenfrom).provider
   const defaultHeaders = mergeMpvPlaybackHeaders(provider, data.headers, defaultQuality.headers)
-  const useAuthenticatedMpvProxy = shouldProxyMpvPlayback(provider, defaultHeaders, Boolean(pageVideo.encType))
-  const defaultUrl = useAuthenticatedMpvProxy
-    ? resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || '', 'mpv')
+  const useMpvProxy = shouldProxyMpvPlayback(Boolean(pageVideo.encType))
+  const defaultUrl = useMpvProxy
+    ? resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || '')
     : defaultQuality.url
   const mpvHeaders = defaultUrl === defaultQuality.url ? defaultHeaders : undefined
   const defaultQualityWidth = (defaultQuality as any).width

@@ -304,25 +304,6 @@ async function assertRealMpvPlayback(player: Page, provider: string): Promise<vo
   await expect(surface.locator('.mpv-embedded-error')).toHaveCount(0)
 }
 
-async function assertProviderMpvTransport(player: Page, provider: string): Promise<void> {
-  if (provider !== '139') return
-  await expect.poll(async () => player.evaluate(() => {
-    const props = (document.querySelector('#mpvEmbeddedPlayer') as any)?.__vueParentComponent?.props || {}
-    const headerNames = Object.keys(props.headers || {}).map(name => name.toLowerCase())
-    return /^https?:\/\//.test(String(props.url || '')) && ['user-agent', 'referer', 'origin'].every(name => headerNames.includes(name))
-  }), { message: '139 MPV transport did not become ready', timeout: 90_000, intervals: [250, 500, 1_000] }).toBe(true)
-  const transport = await player.evaluate(() => {
-    const props = (document.querySelector('#mpvEmbeddedPlayer') as any)?.__vueParentComponent?.props || {}
-    const url = new URL(String(props.url || ''))
-    return {
-      isLocalProxy: url.hostname === '127.0.0.1',
-      headerNames: Object.keys(props.headers || {}).map(name => name.toLowerCase())
-    }
-  })
-  expect(transport.isLocalProxy, '139 MPV must use the signed CDN URL directly').toBe(false)
-  expect(transport.headerNames).toEqual(expect.arrayContaining(['user-agent', 'referer', 'origin']))
-}
-
 async function openMpvPlayerWindow(app: ElectronApplication, action: () => Promise<void>): Promise<Page> {
   const existing = new Set(app.windows())
   await action()
@@ -371,8 +352,6 @@ if (!enabled) {
         await expect(video, `${target.provider} 找不到测试视频 ${target.fileName}`).toBeVisible({ timeout: 60_000 })
         stage = '打开 MPV 播放窗口'
         player = await openMpvPlayerWindow(app, () => video.getByText(target.fileName, { exact: true }).click())
-        stage = '验证 MPV 传输路径'
-        await assertProviderMpvTransport(player, target.provider)
         stage = '验证 MPV 播放和控制'
         await assertRealMpvPlayback(player, target.provider)
         if (!player.isClosed()) await player.close()
