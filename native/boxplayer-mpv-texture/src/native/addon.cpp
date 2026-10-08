@@ -6,19 +6,11 @@
 #include <cmath>
 #include "mpv_context.h"
 
-// Request high-performance GPU on Windows (NVIDIA Optimus / AMD PowerXpress)
-// These exports tell the GPU scheduler to prefer the discrete GPU
-#ifdef _WIN32
-extern "C" {
-    __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
-    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-}
-#endif
-
 using namespace mpv_texture;
 
 // Global context (single instance per process)
 static MpvContext* g_context = nullptr;
+static bool g_creating = false;
 
 // Thread-safe function references for callbacks
 static Napi::ThreadSafeFunction g_frameCallback;
@@ -39,6 +31,7 @@ void ReleaseCallback(Napi::ThreadSafeFunction& callback) {
 Napi::Object TextureInfoToJS(Napi::Env env, const TextureInfo& info) {
     auto obj = Napi::Object::New(env);
     obj.Set("handle", Napi::BigInt::New(env, info.handle));
+    obj.Set("transformed", info.transformed);
     obj.Set("width", Napi::Number::New(env, info.width));
     obj.Set("height", Napi::Number::New(env, info.height));
 
@@ -49,6 +42,26 @@ Napi::Object TextureInfoToJS(Napi::Env env, const TextureInfo& info) {
         default: formatStr = "rgba"; break;
     }
     obj.Set("format", Napi::String::New(env, formatStr));
+    if (!info.planes.empty()) {
+        auto pixmap = Napi::Object::New(env);
+        auto planes = Napi::Array::New(env, info.planes.size());
+        for (size_t index = 0; index < info.planes.size(); ++index) {
+            const auto& plane = info.planes[index];
+            auto item = Napi::Object::New(env);
+            item.Set("fd", plane.fd); item.Set("stride", plane.stride); item.Set("offset", plane.offset);
+            item.Set("size", Napi::Number::New(env, static_cast<double>(plane.size)));
+            planes.Set(index, item);
+        }
+        pixmap.Set("planes", planes);
+        pixmap.Set("modifier", std::to_string(info.modifier));
+        pixmap.Set("supportsZeroCopyWebGpuImport", false);
+        obj.Set("nativePixmap", pixmap);
+    }
+    if (info.lease) {
+        obj.Set("release", Napi::Function::New(env, [lease = info.lease](const Napi::CallbackInfo&) mutable {
+            lease.reset();
+        }));
+    }
     if (info.pixels && !info.pixels->empty()) {
         obj.Set("pixels", Napi::Buffer<uint8_t>::Copy(env, info.pixels->data(), info.pixels->size()));
     }
@@ -60,6 +73,10 @@ Napi::Object TextureInfoToJS(Napi::Env env, const TextureInfo& info) {
 Napi::Object StatusToJS(Napi::Env env, const MpvStatus& status) {
     auto obj = Napi::Object::New(env);
     obj.Set("playing", Napi::Boolean::New(env, status.playing));
+    obj.Set("paused", Napi::Boolean::New(env, !status.playing));
+    obj.Set("loading", Napi::Boolean::New(env, status.loading));
+    obj.Set("buffering", Napi::Boolean::New(env, status.buffering));
+    obj.Set("ended", Napi::Boolean::New(env, status.ended));
     obj.Set("volume", Napi::Number::New(env, status.volume));
     obj.Set("speed", Napi::Number::New(env, status.speed));
     obj.Set("muted", Napi::Boolean::New(env, status.muted));
@@ -74,6 +91,8 @@ Napi::Object TrackStatusToJS(Napi::Env env, const MpvTrackStatus& status) {
     auto obj = Napi::Object::New(env);
     obj.Set("audioId", Napi::Number::New(env, status.audioId));
     obj.Set("subtitleId", Napi::Number::New(env, status.subtitleId));
+    obj.Set("secondarySubtitleId", Napi::Number::New(env, status.secondarySubtitleId));
+    obj.Set("secondarySubtitleLines", Napi::Number::New(env, status.secondarySubtitleLines));
     auto tracks = Napi::Array::New(env, status.tracks.size());
     for (size_t i = 0; i < status.tracks.size(); ++i) {
         const auto& track = status.tracks[i];
@@ -91,11 +110,44 @@ Napi::Object TrackStatusToJS(Napi::Env env, const MpvTrackStatus& status) {
     return obj;
 }
 
+class CreateWorker : public Napi::AsyncWorker {
+public:
+    CreateWorker(Napi::Env env, MpvConfig config)
+        : Napi::AsyncWorker(env), deferred(Napi::Promise::Deferred::New(env)), config(std::move(config)) {}
+    Napi::Promise promise() { return deferred.Promise(); }
+    void Execute() override {
+        context = new MpvContext();
+        if (!context->create(config)) {
+            delete context;
+            context = nullptr;
+            SetError("Failed to create mpv context");
+        }
+    }
+    void OnOK() override { g_context = context; g_creating = false; deferred.Resolve(Env().Undefined()); }
+    void OnError(const Napi::Error& error) override { g_creating = false; deferred.Reject(error.Value()); }
+private:
+    Napi::Promise::Deferred deferred;
+    MpvConfig config;
+    MpvContext* context = nullptr;
+};
+
+class DestroyWorker : public Napi::AsyncWorker {
+public:
+    DestroyWorker(Napi::Env env, MpvContext* context)
+        : Napi::AsyncWorker(env), deferred(Napi::Promise::Deferred::New(env)), context(context) {}
+    Napi::Promise promise() { return deferred.Promise(); }
+    void Execute() override { if (context) { context->destroy(); delete context; } }
+    void OnOK() override { deferred.Resolve(Env().Undefined()); }
+private:
+    Napi::Promise::Deferred deferred;
+    MpvContext* context;
+};
+
 // Create the mpv context
 Napi::Value Create(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
 
-    if (g_context) {
+    if (g_context || g_creating) {
         Napi::TypeError::New(env, "Context already created").ThrowAsJavaScriptException();
         return env.Undefined();
     }
@@ -111,6 +163,9 @@ Napi::Value Create(const Napi::CallbackInfo& info) {
         if (configObj.Has("height")) {
             config.height = configObj.Get("height").As<Napi::Number>().Uint32Value();
         }
+        if (configObj.Get("fontsDir").IsString()) {
+            config.fontsDir = configObj.Get("fontsDir").As<Napi::String>().Utf8Value();
+        }
         if (configObj.Has("hwdec")) {
             config.hwdec = configObj.Get("hwdec").As<Napi::String>().Utf8Value();
         }
@@ -119,40 +174,28 @@ Napi::Value Create(const Napi::CallbackInfo& info) {
         }
     }
 
-#if !defined(__APPLE__) && !defined(BOXPLAYER_MPV_SOFTWARE)
-    // Windows/Linux currently provide libmpv controls only; texture import is
-    // deliberately deferred until the platform-specific renderer is ready.
-    config.headless = true;
-#endif
-
-    g_context = new MpvContext();
-
-    if (!g_context->create(config)) {
-        delete g_context;
-        g_context = nullptr;
-        Napi::Error::New(env, "Failed to create mpv context").ThrowAsJavaScriptException();
-        return env.Undefined();
-    }
-
-    return env.Undefined();
+    g_creating = true;
+    auto* worker = new CreateWorker(env, config);
+    auto promise = worker->promise();
+    worker->Queue();
+    return promise;
 }
 
-// Destroy the context
 Napi::Value Destroy(const Napi::CallbackInfo& info) {
-    Napi::Env env = info.Env();
-
-    if (g_context) {
-        g_context->destroy();
-        delete g_context;
-        g_context = nullptr;
+    auto* context = g_context;
+    g_context = nullptr;
+    if (context) {
+        context->setFrameCallback({});
+        context->setStatusCallback({});
+        context->setErrorCallback({});
     }
-
-    // Context threads have stopped; no worker can enqueue another callback.
     ReleaseCallback(g_frameCallback);
     ReleaseCallback(g_statusCallback);
     ReleaseCallback(g_errorCallback);
-
-    return env.Undefined();
+    auto* worker = new DestroyWorker(info.Env(), context);
+    auto promise = worker->promise();
+    worker->Queue();
+    return promise;
 }
 
 // Load a URL
@@ -332,6 +375,8 @@ Napi::Value SetVideoProperty(const Napi::CallbackInfo& info) {
     return env.Undefined();
 }
 
+Napi::Value AddTrackAsync(Napi::Env env, const std::string& url, const std::string& title, bool audio);
+
 Napi::Value AddAudio(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!g_context) return env.Undefined();
@@ -342,11 +387,33 @@ Napi::Value AddAudio(const Napi::CallbackInfo& info) {
     std::string url = info[0].As<Napi::String>().Utf8Value();
     std::string title = info.Length() > 1 && info[1].IsString()
         ? info[1].As<Napi::String>().Utf8Value() : "";
-    const int result = g_context->addAudio(url, title);
-    if (result < 0) {
-        Napi::Error::New(env, std::string("Failed to add audio: ") + mpv_error_string(result)).ThrowAsJavaScriptException();
-    }
-    return env.Undefined();
+    return AddTrackAsync(env, url, title, true);
+}
+
+// Marshal libmpv's asynchronous command reply back onto the JavaScript thread.
+// The callback owns its TSFN until completion/cancellation, independently of
+// frame/status callbacks and of the next playback context.
+Napi::Value AddTrackAsync(Napi::Env env, const std::string& url, const std::string& title, bool audio) {
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto completion = Napi::ThreadSafeFunction::New(
+        env, Napi::Function::New(env, [](const Napi::CallbackInfo&) {}),
+        "TrackCommandReply", 0, 1
+    );
+    auto reply = [deferred, completion, audio](int error) mutable {
+        completion.NonBlockingCall([deferred, error, audio](Napi::Env env, Napi::Function) {
+            if (!env) return;
+            if (error < 0) {
+                const std::string message = std::string(audio ? "Failed to add audio: " : "Failed to add subtitle: ") + mpv_error_string(error);
+                deferred.Reject(Napi::Error::New(env, message).Value());
+            } else {
+                deferred.Resolve(env.Undefined());
+            }
+        });
+        completion.Release();
+    };
+    if (audio) g_context->addAudio(url, title, std::move(reply));
+    else g_context->addSubtitle(url, title, std::move(reply));
+    return deferred.Promise();
 }
 
 // Add external subtitle
@@ -367,12 +434,7 @@ Napi::Value AddSubtitle(const Napi::CallbackInfo& info) {
     std::string title = info.Length() > 1 && info[1].IsString()
         ? info[1].As<Napi::String>().Utf8Value() : "";
 
-    const int result = g_context->addSubtitle(url, title);
-    if (result < 0) {
-        Napi::Error::New(env, std::string("Failed to add subtitle: ") + mpv_error_string(result)).ThrowAsJavaScriptException();
-    }
-
-    return env.Undefined();
+    return AddTrackAsync(env, url, title, false);
 }
 
 // Toggle mute
@@ -539,6 +601,9 @@ Napi::Value IsInitialized(const Napi::CallbackInfo& info) {
 
 // Module initialization
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
+    exports.Set("useSoftwareReadback", Napi::Function::New(env, [](const Napi::CallbackInfo&) {
+        if (g_context) g_context->useSoftwareReadback();
+    }));
     exports.Set("create", Napi::Function::New(env, Create));
     exports.Set("destroy", Napi::Function::New(env, Destroy));
     exports.Set("load", Napi::Function::New(env, Load));

@@ -237,7 +237,7 @@ export default class ipcEvent {
     ipcMain.handle('MpvEmbedded:load', async (event, data) => embeddedMpvBridge.load(data || {}, event.sender))
     ipcMain.handle('MpvEmbedded:control', async (_event, data) => embeddedMpvBridge.control(data || {}))
     ipcMain.handle('MpvEmbedded:getStatus', async () => embeddedMpvBridge.getStatus())
-    ipcMain.on('MpvEmbedded:softwareFrameConsumed', (event) => embeddedMpvBridge.acknowledgeSoftwareFrame?.(event.sender))
+    ipcMain.on('MpvEmbedded:softwareFrameConsumed', (event, ack) => embeddedMpvBridge.acknowledgeSoftwareFrame?.(event.sender, ack))
   }
 
   private static handleMediaAcquisition() {

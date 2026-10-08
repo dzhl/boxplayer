@@ -9,6 +9,7 @@ export interface MediaLibraryItem {
   posterUrl?: string
   backdropUrl?: string
   year?: string
+  releaseDate?: string
   rating?: number
   genres: string[]
   productionCountries?: string[]
@@ -45,6 +46,7 @@ export interface MediaCollectionMovie {
   posterUrl?: string
   backdropUrl?: string
   year?: string
+  releaseDate?: string
   rating?: number
   genres: string[]
   productionCountries?: string[]

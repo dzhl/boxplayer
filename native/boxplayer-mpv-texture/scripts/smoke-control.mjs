@@ -25,7 +25,7 @@ async function waitForTrackCount(type, expected, timeout = 5_000) {
 }
 
 try {
-  mpv.create({ headless: true })
+  await mpv.create({ headless: true })
   if (mpv.isInitialized?.() === false) throw new Error('libmpv did not initialize')
   mpv.setVolume(50)
   mpv.setSpeed(1.25)
@@ -54,7 +54,7 @@ try {
       ['tone-mapping', 'auto'],
       ['brightness', '10']
     ]) mpv.setVideoProperty(name, value)
-    mpv.addAudio(audioSamplePath, 'external-smoke-audio')
+    await mpv.addAudio(audioSamplePath, 'external-smoke-audio')
     await waitForTrackCount('audio', 2)
     const audioTracks = (mpv.getTrackStatus()?.tracks || []).filter((track) => track.type === 'audio')
     if (audioTracks.length < 2 || !audioTracks.some((track) => track.external || track.title === 'external-smoke-audio')) {
@@ -69,11 +69,11 @@ try {
     mpv.onStatus(() => {})
     mpv.onError(() => {})
     mpv.onFrame(() => {})
-    mpv.destroy()
-    mpv.destroy()
-    mpv.create({ headless: true })
+    await mpv.destroy()
+    await mpv.destroy()
+    await mpv.create({ headless: true })
   }
   console.log(`libmpv controls OK: ${process.platform}/${process.arch} ${addonPath}`)
 } finally {
-  mpv.destroy()
+  await mpv.destroy()
 }

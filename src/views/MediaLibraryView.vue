@@ -1,5 +1,5 @@
 <template>
-  <div class="media-library-view">
+  <div class="media-library-view" :class="{ 'unified-folder-view': props.unifiedFiles }">
     <div class="media-library-shell">
       <!-- 左侧导航 -->
       <div v-show="props.navVisible ?? true" class="library-sidebar">
@@ -19,6 +19,14 @@
       <div class="media-library-pane">
         <MediaLibrary
           ref="mediaLibrary"
+          :unified-files="props.unifiedFiles"
+          :folder-descending="props.folderDescending"
+          @detailVisibilityChange="emit('detailVisibilityChange', $event)"
+          :unifiedBrowse="props.unifiedBrowse"
+          :browseMode="props.browseMode"
+          :localOnly="props.localOnly"
+          :browseSort="props.browseSort"
+          :browseSelection="props.browseSelection"
           :activeCategory="activeCategory"
           :selectedFolder="selectedFolder"
           :selectedGenre="selectedGenre"
@@ -72,7 +80,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { compareMediaBrowseValues, nextMediaBrowseSort, type MediaBrowseSort } from '../utils/mediaBrowseSort'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import MediaLibraryNav from '../components/MediaLibraryNav.vue'
 import MediaLibrary from '../components/MediaLibrary.vue'
 import { useMediaLibraryStore } from '../store/medialibrary'
@@ -97,12 +106,21 @@ const mediaLibrary = ref()
 // Props
 const props = defineProps<{
   navVisible?: boolean
+  unifiedBrowse?: boolean
+  unifiedFiles?: boolean
+  folderDescending?: boolean
+  browseMode?: 'grid' | 'list'
+  localOnly?: boolean
+  browseSort?: MediaBrowseSort
+  browseSelection?: boolean
 }>()
+const emit = defineEmits<{ detailVisibilityChange: [visible: boolean]; browseContextChange: [context: { folderId: string; category: string }] }>()
 
 // 状态
 const showScanProgress = ref(false)
 const activeCategory = ref('home')
 const selectedFolder = ref<MediaLibraryFolder>()
+watch([selectedFolder, activeCategory], () => emit('browseContextChange', { folderId: selectedFolder.value?.id || '', category: activeCategory.value }))
 const selectedGenre = ref('')
 const selectedYear = ref('')
 const selectedRating = ref('')
@@ -644,11 +662,25 @@ onUnmounted(() => {
 
 // 暴露方法给父组件
 defineExpose({
-  addFolderToLibrary
+  refreshMetadata: () => mediaLibrary.value?.refreshMetadata(),
+  posterAction: (item: import('../types/media').MediaLibraryItem, action: import('../utils/mediaPosterMenu').PosterAction) => mediaLibrary.value?.posterAction(item, action),
+  folderTitle: computed(() => mediaLibrary.value?.folderTitle || selectedFolder.value?.name || ''),
+  goFolderBack: () => mediaLibrary.value?.goFolderBack(),
+  activeCategory,
+  playFolder: (id: string, mode: 'play' | 'loop' | 'shuffle') => mediaLibrary.value?.playBrowse(mode, id),
+  playBrowse: (mode: 'play' | 'loop' | 'shuffle') => mediaLibrary.value?.playBrowse(mode),
+  addFolderToLibrary,
+  showAddFolder: () => mediaNav.value?.importLocalFolder(),
+  removeFolder: (folder: MediaLibraryFolder) => mediaNav.value?.removeFolder(folder),
+  manageLibrary: handleManageLibrary,
+  selectCategory: handleCategorySelected,
+  selectFolder: handleFolderSelected,
+  openItem: (item: import('../types/media').MediaLibraryItem) => mediaLibrary.value?.openMedia(item)
 })
 </script>
 
 <style scoped>
+:global(#xbybody .media-library-view.unified-folder-view .media-library-pane){padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important}
 .media-library-view {
   height: 100%;
   width: 100%;
@@ -809,4 +841,8 @@ defineExpose({
     max-width: 218px;
   }
 }
+</style>
+
+<style>
+#xbybody .media-library-pane:has(.local-file-collection){padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important}
 </style>

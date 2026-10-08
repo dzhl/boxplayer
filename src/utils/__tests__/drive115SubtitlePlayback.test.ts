@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest'
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
 describe('115 subtitle playback', () => {
-  it('passes authenticated provider URLs and headers directly to MPV while retaining the proxy for encrypted playback', () => {
+  it('passes ordinary authenticated URLs directly to MPV while retaining Quark and encrypted proxies', () => {
     const source = readSource('src/layout/PageVideo.vue')
 
-    expect(source).toContain('const useMpvProxy = shouldProxyMpvPlayback(Boolean(pageVideo.encType))')
-    expect(source).toContain('? resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || \'\')')
+    expect(source).toContain('const transport = resolveMpvPlaybackTransport(provider, Boolean(pageVideo.encType))')
+    expect(source).toContain('? resolveHeaderAwareVideoUrl(defaultQuality.url, defaultHeaders, data.size, defaultQuality.quality || \'\', transport.proxyKind)')
     expect(source).toContain(': defaultQuality.url')
     expect(source).toContain("const resolveRawMpvQualitySource = (data: IRawUrl")
     expect(source).toContain('const mpvHeaders = defaultUrl === defaultQuality.url ? defaultHeaders : undefined')
@@ -80,7 +80,7 @@ describe('115 subtitle playback', () => {
     const source = readSource('src/layout/PageVideo.vue')
 
     expect(source).toContain('const getSubtitleFileList = async (includeSubfolders = false)')
-    expect(source).toContain('if (includeSubfolders) {')
+    expect(source).toContain('discoverSubtitleFiles(parentId, includeSubfolders,')
     expect(source).toContain('const getSubTitleList = async (art: Artplayer, autoLoad = true)')
     expect(source).toContain("useSettingStore().mediaLibrarySubtitleScope === 'include-subfolders'")
     expect(source).not.toContain('subTitleListMode')

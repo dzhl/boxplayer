@@ -1,7 +1,7 @@
 <template>
-  <div class="media-library">
+  <div class="media-library" :class="{ 'unified-category': props.unifiedBrowse, 'unified-folder': props.unifiedFiles }">
     <!-- 顶部导航 - 详情页面时隐藏 -->
-    <div v-if="!showingDetail && !isHomeView && !props.selectedFolder" class="library-header">
+    <div v-if="!props.unifiedBrowse && !showingDetail && !isHomeView && !props.selectedFolder" class="library-header">
       <div class="library-tabs">
         <a-tabs v-model:activeKey="activeTab" type="text" class="hidetabs">
           <a-tab-pane key="continue" :tab="t('mediaLibrary.continue')" />
@@ -304,6 +304,7 @@
                   @contextmenu.prevent="openContextMenu($event, item)"
                 >
                   <div class="media-poster">
+                    <WatchedIndicator corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
                     <img
                       v-if="item.posterUrl"
                       :src="item.posterUrl"
@@ -311,7 +312,7 @@
                       @error="handleImageError"
                     />
                     <div v-else class="poster-placeholder">
-                      <IconFont name="iconfile-video" />
+                      <MediaPosterPlaceholder />
                     </div>
 
                     <div v-if="isContinueWatchingView && item.watchProgress !== undefined" class="watch-progress">
@@ -363,6 +364,7 @@
                   @contextmenu.prevent="openContextMenu($event, item)"
                 >
                   <div class="list-poster">
+                    <WatchedIndicator corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
                     <img
                       v-if="item.posterUrl"
                       :src="item.posterUrl"
@@ -370,7 +372,7 @@
                       @error="handleImageError"
                     />
                     <div v-else class="poster-placeholder">
-                      <IconFont name="iconfile-video" />
+                      <MediaPosterPlaceholder />
                     </div>
                     <div v-if="getCoverageBadge(item)" class="media-coverage-badge" :title="getCoverageBadge(item)">
                       <span>!</span>{{ getCoverageBadge(item) }}
@@ -399,6 +401,7 @@
                       </p>
                     </div>
 
+                    <WatchedIndicator :watched="isMediaWatched(item, mediaStore.watchedItems)" @toggle="toggleLocalMediaWatched(item)" />
                     <div class="list-meta">
                       <span class="list-type">{{ item.type === 'movie' ? t('mediaLibrary.typeMovie') : item.type === 'tv' ? t('mediaLibrary.typeTv') : t('mediaLibrary.typeUnmatched') }}</span>
                       <span v-if="item.year" class="list-year">{{ item.year }}</span>
@@ -407,7 +410,8 @@
                       </span>
                     </div>
 
-                    <div v-if="item.genres.length" class="list-genres">
+                    <WatchedIndicator :watched="isMediaWatched(item, mediaStore.watchedItems)" @toggle="toggleLocalMediaWatched(item)" />
+              <div v-if="item.genres.length" class="list-genres">
                       <span v-for="genre in item.genres.slice(0, 5)" :key="genre" class="genre-tag">
                         {{ genre }}
                       </span>
@@ -475,9 +479,7 @@
                           @load="handleMediaServerSearchImageLoad"
                           @error="handleMediaServerSearchImageError"
                         />
-                        <div class="media-card-placeholder media-image-placeholder">
-                          {{ item.title.slice(0, 1) }}
-                        </div>
+                        <div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
                       </div>
                       <div class="search-media-server-result-main">
                         <span class="search-media-server-result-title">{{ item.title }}</span>
@@ -498,7 +500,7 @@
 
       <!-- 文件列表 - 当选择文件夹时显示 PanRight 组件 -->
       <div v-else-if="props.selectedFolder && folderFileList.length > 0" class="folder-file-list">
-        <div class="folder-header">
+        <div v-if="!props.unifiedFiles" class="folder-header">
           <div class="folder-header-content">
             <div class="folder-actions">
               <button
@@ -519,7 +521,7 @@
           </div>
         </div>
         <div class="pan-right-container">
-          <MediaPanRight @enter-folder="handleEnterFolder" />
+          <MediaPanRight :unified-files="props.unifiedFiles" :browse-mode="props.browseMode" :browse-selection="effectiveBrowseSelection" :descending="props.folderDescending" @enter-folder="handleEnterFolder" @file-action="handleBrowserFileAction" />
         </div>
       </div>
 
@@ -546,14 +548,14 @@
           </div>
         </div>
         <div class="empty-state">
-          <a-empty :description="t('mediaLibrary.emptyFolder')" />
+          <MediaEmptyFolder />
         </div>
       </div>
 
       <!-- 分类聚合视图 -->
       <div v-else-if="showCategoryView" class="category-view">
         <!-- 网格视图 -->
-        <div v-if="viewMode === 'grid'" class="category-grid">
+        <div v-if="!props.unifiedBrowse && viewMode === 'grid'" class="category-grid">
           <CategoryCard
             v-for="item in categoryItems"
             :key="`${item.type}-${item.name}`"
@@ -566,11 +568,13 @@
         </div>
 
         <!-- 列表视图 - 横向卡片布局 -->
-        <div v-else-if="viewMode === 'list'" class="category-list">
+        <div v-else-if="props.unifiedBrowse || viewMode === 'list'" class="category-list">
           <div
             v-for="item in categoryItems"
             :key="`${item.type}-${item.name}`"
             class="category-list-card"
+            role="button" tabindex="0"
+            @keydown.enter="handleCategoryClick({ name: item.name, type: item.type, count: item.count })"
             :style="getListCardStyle(item)"
             @click="handleCategoryClick({ name: item.name, type: item.type, count: item.count })"
           >
@@ -646,22 +650,28 @@
 
       <!-- 空状态 - 当没有媒体内容时 -->
       <div v-else-if="pagedItems.length === 0" class="empty-state">
-        <a-empty :description="t('mediaLibrary.noMediaContent')" />
+        <MediaEmptyFolder />
       </div>
 
       <!-- 媒体内容 -->
       <div v-else :class="['media-container', viewMode, `poster-${posterType}`]">
+        <div v-if="localSelection" class="poster-selection-bar"><span>{{ t('posterMenu.selectedCount', { count: selectedBrowseIds.length }) }}</span><button @click="localSelection = false; selectedBrowseIds = []">{{ t('common.cancel') }}</button></div>
+        <div v-if="props.unifiedBrowse && pagedItems.every(item => localFileForMedia(item))" class="local-file-collection" :class="{ 'local-file-collection-list': viewMode === 'list' }">
+          <LocalMediaFileCard portrait-list v-for="item in pagedItems" :key="item.id" :name="localFileForMedia(item)!.name" :path="localFileForMedia(item)!.path" :thumbnail="localFileForMedia(item)!.thumbnailLink" :duration="localFileForMedia(item)!.videoDuration" :height="localFileForMedia(item)!.height" :mode="viewMode" :selection="effectiveBrowseSelection" :selected="selectedBrowseIds.includes(item.id)" :watched="isMediaWatched(item, mediaStore.watchedItems)" @open="handleBrowseClick(item)" @watched="toggleLocalMediaWatched(item)" @context="openContextMenu($event, item)" />
+        </div>
         <!-- 网格视图 -->
-        <div v-if="viewMode === 'grid'" class="media-grid" :class="`media-grid-${posterType}`">
-          <div
-            v-for="item in pagedItems"
-            :key="item.id"
+        <div v-else-if="viewMode === 'grid'" class="media-grid" :class="`media-grid-${posterType}`">
+          <template v-for="item in pagedItems" :key="item.id">
+          <LocalMediaFileCard portrait-list v-if="props.unifiedBrowse && localFileForMedia(item)" :name="localFileForMedia(item)!.name" :path="localFileForMedia(item)!.path" :thumbnail="localFileForMedia(item)!.thumbnailLink" :duration="localFileForMedia(item)!.videoDuration" :height="localFileForMedia(item)!.height" :mode="viewMode" :selection="effectiveBrowseSelection" :selected="selectedBrowseIds.includes(item.id)" :watched="isMediaWatched(item, mediaStore.watchedItems)" @open="handleBrowseClick(item)" @watched="toggleLocalMediaWatched(item)" @context="openContextMenu($event, item)" />
+          <div v-else
             class="media-item"
             :class="`media-item-${posterType}`"
-            @click="openMedia(item)"
+            :data-selected="selectedBrowseIds.includes(item.id)"
+            @click="handleBrowseClick(item)"
             @contextmenu.prevent="openContextMenu($event, item)"
           >
             <div class="media-poster" :class="{ 'has-image': !!getItemDisplayImage(item) }">
+              <WatchedIndicator corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
               <img
                 v-if="getItemDisplayImage(item)"
                 :src="getItemDisplayImage(item)"
@@ -670,7 +680,7 @@
                 @error="handleImageError"
               />
               <div class="poster-placeholder">
-                <img class="poster-placeholder-app-icon" :src="appIconUrl" alt="BoxPlayer" />
+                <MediaPosterPlaceholder />
               </div>
 
               <div v-if="isContinueWatchingView && item.watchProgress !== undefined" class="watch-progress">
@@ -713,22 +723,25 @@
               </p>
             </div>
           </div>
+          </template>
         </div>
 
         <!-- 列表视图 -->
         <div v-else-if="viewMode === 'list'" class="media-list">
-          <div
-            v-for="item in pagedItems"
-            :key="item.id"
+          <template v-for="item in pagedItems" :key="item.id">
+          <LocalMediaFileCard portrait-list v-if="props.unifiedBrowse && localFileForMedia(item)" :name="localFileForMedia(item)!.name" :path="localFileForMedia(item)!.path" :thumbnail="localFileForMedia(item)!.thumbnailLink" :duration="localFileForMedia(item)!.videoDuration" :height="localFileForMedia(item)!.height" :mode="viewMode" :selection="effectiveBrowseSelection" :selected="selectedBrowseIds.includes(item.id)" :watched="isMediaWatched(item, mediaStore.watchedItems)" @open="handleBrowseClick(item)" @watched="toggleLocalMediaWatched(item)" @context="openContextMenu($event, item)" />
+          <div v-else
             class="media-list-item"
             :class="`media-list-item-${posterType}`"
-            @click="openMedia(item)"
+            :data-selected="selectedBrowseIds.includes(item.id)"
+            @click="handleBrowseClick(item)"
             @contextmenu.prevent="openContextMenu($event, item)"
           >
             <div
               class="list-poster"
               :class="{ 'has-image': !!getItemDisplayImage(item) }"
             >
+              <WatchedIndicator corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
               <img
                 v-if="getItemDisplayImage(item)"
                 :src="getItemDisplayImage(item)"
@@ -737,7 +750,7 @@
                 @error="handleImageError"
               />
               <div class="poster-placeholder">
-                <img class="poster-placeholder-app-icon" :src="appIconUrl" alt="BoxPlayer" />
+                <MediaPosterPlaceholder />
               </div>
               <div class="type-badge">
                 {{ getItemTypeLabel(item) }}
@@ -766,7 +779,13 @@
                 </div>
               </div>
 
-              <div v-if="getItemMetaItems(item).length" class="list-meta">
+              <div v-if="props.unifiedBrowse" class="list-meta unified-list-meta">
+                <span v-if="item.rating != null" class="list-rating"><IconFont name="iconstar" />{{ item.rating.toFixed(1) }}</span>
+                <span v-if="item.year">{{ item.year }}</span>
+                <span v-if="item.productionCountries?.length">{{ item.productionCountries.join(', ') }}</span>
+                <span v-if="item.genres?.length">{{ item.genres.join(', ') }}</span>
+              </div>
+              <div v-else-if="getItemMetaItems(item).length" class="list-meta">
                 <span
                   v-for="meta in getItemMetaItems(item)"
                   :key="`${item.id}-${meta}`"
@@ -778,7 +797,7 @@
 
               <div class="list-main">
                 <p class="list-overview" :class="{ 'is-empty': !item.overview }">
-                  {{ getItemOverview(item) || t('mediaServer.noOverview') }}
+                  {{ (props.unifiedBrowse ? item.overview : getItemOverview(item)) || t('mediaServer.noOverview') }}
                 </p>
                 <p v-if="item.type === 'unmatched' && getUnmatchedPath(item)" class="list-path" :title="getUnmatchedPath(item)">
                   {{ getUnmatchedPath(item) }}
@@ -798,6 +817,7 @@
               </div>
             </div>
           </div>
+          </template>
         </div>
         <div v-if="pagedItems.length < pagedTotal" class="media-library-load-more">
           <a-button :loading="isLoadingPage" @click="loadNextPage">加载更多</a-button>
@@ -819,57 +839,18 @@
         </a-form-item>
       </a-form>
     </a-modal>
-    <a-dropdown
-      class="rightmenu"
+    <a-trigger
       popup-class="library-context-popup"
       :popup-visible="showContextMenu"
-      :style="contextMenuStyle"
-      @popup-visible-change="handleContextMenuClose"
+      auto-fit-position
+      @popup-visible-change="(visible: boolean) => { if (!visible) handleContextMenuClose() }"
     >
-      <div style="width: 1px; height: 1px; visibility: hidden;" />
+      <div :style="contextMenuStyle" style="width: 1px; height: 1px; visibility: hidden;" />
       <template #content>
-        <div class="library-card-context-menu">
-          <button type="button" class="library-card-context-item" @click="playFromMenu">
-            <span class="library-card-context-icon">▷</span>
-            <span>{{ t('mediaLibrary.play') }}</span>
-          </button>
-          <template v-if="isContinueWatchingView">
-            <div class="library-card-context-divider" />
-            <button type="button" class="library-card-context-item" @click="removeFromContinueWatchingFromMenu">
-              <span class="library-card-context-icon">↺</span>
-              <span>{{ t('mediaLibrary.removeContinue') }}</span>
-            </button>
-          </template>
-          <template v-else>
-            <button type="button" class="library-card-context-item" @click="toggleFavoriteFromMenu">
-              <span class="library-card-context-icon">{{ contextMenuIsFavorite ? '♥' : '♡' }}</span>
-              <span>{{ contextMenuIsFavorite ? t('mediaServer.removeFavorite') : t('mediaLibrary.favorite') }}</span>
-            </button>
-            <button type="button" class="library-card-context-item" @click="toggleWatchedFromMenu">
-              <span class="library-card-context-icon context-icon-filled">✓</span>
-              <span>{{ contextMenuIsWatched ? t('mediaServer.markUnwatched') : t('mediaServer.markWatched') }}</span>
-            </button>
-            <button v-if="hasPlaylists" type="button" class="library-card-context-item" @click="togglePlaylistFromMenu">
-              <span class="library-card-context-icon">≡</span>
-              <span>{{ contextMenuInPlaylist ? t('mediaLibrary.removePlaylist') : t('mediaLibrary.addPlaylist') }}</span>
-            </button>
-            <button type="button" class="library-card-context-item" @click="aiRescrapeFromMenu">
-              <span class="library-card-context-icon">AI</span>
-              <span>{{ t('mediaLibrary.aiRescrape') }} <span class="ai-pro-badge">Pro</span></span>
-            </button>
-            <button type="button" class="library-card-context-item" @click="openManualMetadataEditor">
-              <span class="library-card-context-icon">✎</span>
-              <span>{{ t('mediaLibrary.manualEdit') }}</span>
-            </button>
-            <div class="library-card-context-divider" />
-            <button type="button" class="library-card-context-item danger" @click="deleteMediaFromMenu">
-              <span class="library-card-context-icon">✕</span>
-              <span>{{ t('common.delete') }}</span>
-            </button>
-          </template>
-        </div>
+        <MediaPosterMenu :tv="contextMenuItem?.type === 'tv'" :watched="contextMenuIsWatched" :disabled="contextMenuItem && downloadableMediaFiles(contextMenuItem).length ? [] : ['download']" @action="handlePosterAction" />
       </template>
-    </a-dropdown>
+    </a-trigger>
+    <a-modal v-model:visible="playlistVisible" :title="t('media.playlist')" :footer="false" :width="440"><div class="poster-playlist-picker"><label v-for="name in Object.keys(mediaStore.playlists)" :key="name"><input type="checkbox" :checked="mediaStore.isInPlaylist(name, playlistTargetId)" @change="mediaStore.togglePlaylistItem(name, playlistTargetId)" />{{ name }}</label><form @submit.prevent="createPlaylistForTarget"><a-input v-model="playlistTitle" :aria-label="t('posterMenu.playlistName')" :placeholder="t('posterMenu.playlistName')" :max-length="120" /><a-button html-type="submit" :disabled="!playlistTitle.trim()">{{ t('posterMenu.createPlaylist') }}</a-button></form><p v-if="playlistError" role="alert">{{ playlistError }}</p></div></a-modal>
     <MediaMetadataEditorModal
       v-if="manualMetadataTarget"
       :defaults-to-whole-tv-series="manualMetadataDefaultsToWholeTvSeries"
@@ -882,6 +863,12 @@
 </template>
 
 <script setup lang="ts">
+import { openMediaShare } from '../utils/mediaShare'
+import { openPersonalRating } from '../utils/mediaPersonalRating'
+import { Modal } from '@arco-design/web-vue'
+import MediaPosterPlaceholder from './MediaPosterPlaceholder.vue'
+import MediaEmptyFolder from './MediaEmptyFolder.vue'
+import { compareMediaBrowseValues, nextMediaBrowseSort, type MediaBrowseSort } from '../utils/mediaBrowseSort'
 import { ref, computed, onMounted, watch } from 'vue'
 import type { CSSProperties } from 'vue'
 import { useMediaLibraryStore } from '../store/medialibrary'
@@ -889,6 +876,12 @@ import DB from '../utils/db'
 import { useAppStore } from '../store'
 import useMediaServerRegistryStore from '../store/mediaServerRegistry'
 import useMediaServerNavigationStore from '../store/mediaServerNavigation'
+import { openCustomSeries } from '../utils/customMediaSeries'
+import MediaPosterMenu from './MediaPosterMenu.vue'
+import type { PosterAction } from '../utils/mediaPosterMenu'
+import LocalMediaFileCard from './LocalMediaFileCard.vue'
+import WatchedIndicator from './WatchedIndicator.vue'
+import { isMediaWatched, localWatchedKeys, setMediaWatched } from '../utils/localWatchedState'
 import MediaPanRight from './MediaPanRight.vue'
 import { useMediaPanFileStore, useMediaPanTreeStore } from './stores'
 import CategoryCard from './CategoryCard.vue'
@@ -911,12 +904,15 @@ import { apiBaiduFileList, mapBaiduFileToAliModel } from '../cloudbaidu/dirfilel
 import { getWebDavConnection, getWebDavConnectionId, isWebDavDrive, listWebDavDirectory } from '../utils/webdavClient'
 import { menuOpenFile } from '../utils/openfile'
 import message from '../utils/message'
+import DownDAL from '../down/DownDAL'
+import useSettingStore from '../setting/settingstore'
 import { manualAIScrapeItems } from '../utils/mediaAIScrape'
 import useLocalMediaHomePreferencesStore from '../store/localMediaHomePreferences'
 import { getMediaCoverage } from '../utils/mediaCoverage'
 import type { LocalMediaHomePosterType, LocalMediaHomeSectionKey } from '../store/localMediaHomePreferences'
 import { t } from '../i18n'
 import { appIconUrl } from '../utils/appAssets'
+import { hasLocalMedia } from '../utils/unifiedMediaScope'
 
 type MediaListItem = MediaLibraryItem & {
   continueEpisodeLabel?: string
@@ -952,7 +948,33 @@ const props = defineProps<{
   selectedRating?: string
   searchQuery?: string
   fromHomeNavigation?: boolean
+  unifiedBrowse?: boolean
+  unifiedFiles?: boolean
+  folderDescending?: boolean
+  browseMode?: 'grid' | 'list'
+  localOnly?: boolean
+  browseSort?: MediaBrowseSort
+  browseSelection?: boolean
 }>()
+const localSelection = ref(false)
+const effectiveBrowseSelection = computed(() => props.browseSelection || localSelection.value)
+const playlistVisible = ref(false)
+const playlistTargetId = ref('')
+const playlistTitle = ref('')
+const playlistError = ref('')
+function showPlaylistPicker() { if (!contextMenuItem.value) return; playlistTargetId.value = contextMenuItem.value.id; playlistTitle.value = ''; playlistError.value = ''; playlistVisible.value = true; handleContextMenuClose() }
+function createPlaylistForTarget() { const name = playlistTitle.value.trim(); if (!name) return; if (Object.hasOwn(mediaStore.playlists, name)) { playlistError.value = t('posterMenu.duplicatePlaylist'); return }; mediaStore.addPlaylist(name); mediaStore.togglePlaylistItem(name, playlistTargetId.value); playlistTitle.value = '' }
+const selectedBrowseIds = ref<string[]>([])
+const handleBrowseClick = (item: MediaLibraryItem) => {
+  if (!effectiveBrowseSelection.value) {
+    const file = localFileForMedia(item)
+    if (props.unifiedBrowse && file) { void menuOpenFile(buildAliFileModel(file)); return }
+    openMedia(item); return
+  }
+  const index = selectedBrowseIds.value.indexOf(item.id)
+  if (index < 0) selectedBrowseIds.value.push(item.id)
+  else selectedBrowseIds.value.splice(index, 1)
+}
 
 const mediaStore = useMediaLibraryStore()
 const appStore = useAppStore()
@@ -981,6 +1003,7 @@ const selectedPlaylist = ref('')
 const localSearchQuery = ref(props.searchQuery || '')
 const viewMode = ref<'grid' | 'list'>('grid') // 添加视图模式状态
 const posterType = ref<'portrait' | 'landscape'>('portrait')
+watch(() => props.browseMode, mode => { if (mode) viewMode.value = mode }, { immediate: true })
 const showingDetail = ref(false)
 const currentMediaItem = ref<MediaLibraryItem>()
 const mediaServerSearchLoading = ref(false)
@@ -1080,9 +1103,10 @@ const getMediaPageQuery = () => {
   const watchedIds = mediaStore.watchedItems
   const type: MediaLibraryItem['type'] | undefined = category === 'movies' ? 'movie' : ['tv', 'tv-shows'].includes(category) ? 'tv' : category === 'unmatched' ? 'unmatched' : undefined
   const predicate = (item: MediaLibraryItem) => {
+    if (props.localOnly && !hasLocalMedia(item)) return false
     if (category === 'documentary' && !item.genres.some(genre => String(genre).toLowerCase() === '99' || String(genre).includes('纪录'))) return false
     if (category === 'animation' && !item.genres.some(genre => String(genre).toLowerCase() === '16' || String(genre).includes('动画') || String(genre).includes('动漫'))) return false
-    if (category === 'unwatched' && (watchedIds.includes(item.id) || watchedIds.some(id => String(id).startsWith(`${item.id}_`)))) return false
+    if (category === 'unwatched' && isMediaWatched(item, watchedIds)) return false
     if (selectedGenreValue && !item.genres.includes(selectedGenreValue)) return false
     if (selectedYearValue) {
       const year = Number(item.year || 0)
@@ -1115,6 +1139,7 @@ const loadMediaPage = async (reset = false) => {
           : undefined
   if (localItems) {
     const matched = localItems.filter(predicate)
+    if (props.browseSort) matched.sort(compareBrowseItems)
     pagedTotal.value = matched.length
     pagedItems.value = reset ? matched.slice(0, MEDIA_PAGE_SIZE) : [...pagedItems.value, ...matched.slice(pagedItems.value.length, pagedItems.value.length + MEDIA_PAGE_SIZE)]
     return
@@ -1123,7 +1148,7 @@ const loadMediaPage = async (reset = false) => {
   try {
     const offset = reset ? 0 : pagedItems.value.length
     const [items, total] = await Promise.all([
-      DB.getMediaLibraryPage({ offset, limit: MEDIA_PAGE_SIZE, type, predicate }),
+      DB.getMediaLibraryPage({ offset, limit: MEDIA_PAGE_SIZE, type, predicate, sort: props.browseSort ? compareBrowseItems : undefined }),
       DB.countMediaLibraryItems({ type, predicate })
     ])
     if (requestId !== pageRequestId) return
@@ -1142,6 +1167,9 @@ const loadMediaPage = async (reset = false) => {
 }
 
 const loadNextPage = () => void loadMediaPage(false)
+watch(() => props.browseSort, () => void loadMediaPage(true))
+watch(() => props.browseSelection, () => { localSelection.value = false; selectedBrowseIds.value = [] })
+watch(() => props.localOnly, () => void loadMediaPage(true))
 
 watch(
   () => [props.activeCategory, props.selectedFolder?.id, props.selectedGenre, props.selectedYear, props.selectedRating, activeTab.value, selectedPlaylist.value, selectedCast.value, selectedCountry.value, localSearchQuery.value, mediaStore.watchedItems.join('\n'), mediaStore.favorites.join('\n'), mediaStore.recentlyAdded.length, mediaStore.isScanning],
@@ -1299,10 +1327,7 @@ const animationItems = computed(() => mediaStore.mediaItems.filter((item) => {
   })
 }))
 
-const unwatchedItems = computed(() => mediaStore.mediaItems.filter(item => {
-  if (mediaStore.watchedItems.includes(item.id)) return false
-  return !mediaStore.watchedItems.some(watchedId => String(watchedId).startsWith(`${item.id}_`))
-}))
+const unwatchedItems = computed(() => mediaStore.mediaItems.filter(item => !isMediaWatched(item, mediaStore.watchedItems)))
 
 const favoriteItems = computed(() => mediaStore.favorites
   .map(favoriteIdToMediaItem)
@@ -1337,7 +1362,7 @@ const localItemToNode = (
     rating: typeof item.rating === 'number' ? item.rating : undefined,
     progress: options.progress,
     parentTitle: item.type === 'tv' && getEpisodeTitleSuffix(item) ? getEpisodeTitleSuffix(item) : undefined,
-    isPlayed: mediaStore.isWatchedById?.(item.id) || false,
+    isPlayed: isMediaWatched(item as MediaLibraryItem, mediaStore.watchedItems),
     isFavorite: mediaStore.isFavorite?.(item.id) || false,
     coverageBadge: getMediaCoverage(item)?.summary
   }
@@ -1617,9 +1642,9 @@ const currentCategorySourceItems = computed<MediaLibraryItem[]>(() => {
   }
 })
 
-const categoryItems = computed(() => {
-  const category = props.activeCategory || activeTab.value
-  const sourceItems = currentCategorySourceItems.value
+type CategoryGroup = { name: string; count: number; type: 'genre' | 'rating' | 'year'; items: MediaLibraryItem[]; range?: number[] }
+const getCategoryGroups = (category: string): CategoryGroup[] => {
+  const sourceItems = props.localOnly ? currentCategorySourceItems.value.filter(hasLocalMedia) : currentCategorySourceItems.value
 
   switch (category) {
     case 'genres': {
@@ -1687,6 +1712,25 @@ const categoryItems = computed(() => {
     default:
       return []
   }
+}
+const categoryItems = computed(() => {
+  const category = props.activeCategory || activeTab.value
+  const items = props.unifiedBrowse && category === 'genres'
+    ? ['genres', 'years', 'ratings'].flatMap(getCategoryGroups)
+    : getCategoryGroups(category)
+  if (!props.unifiedBrowse) return items
+  const values = (group: typeof items[number]) => ({ title: group.name, fileName: group.name,
+    addedAt: Math.max(0, ...group.items.map(item => new Date(item.addedAt || 0).getTime() || 0)),
+    premiereDate: String(Math.max(0, ...group.items.map(item => Number(item.year) || 0))) + '-01-01' })
+  return [...items].sort((a, b) => {
+    const sort = props.browseSort || 'title'
+    if (sort === 'title' || sort === 'fileName') {
+      const rank = { genre: 0, year: 1, rating: 2 }
+      const groupOrder = rank[a.type] - rank[b.type]
+      if (groupOrder) return groupOrder
+    }
+    return compareMediaBrowseValues(values(a), values(b), sort)
+  })
 })
 
 const playlistItems = computed(() => {
@@ -1777,6 +1821,14 @@ const getUnmatchedPath = (item: MediaLibraryItem) => {
   return item.driveFiles?.[0]?.path || ''
 }
 
+const toggleLocalMediaWatched = (item: MediaLibraryItem) => {
+  const watched = !isMediaWatched(item, mediaStore.watchedItems)
+  setMediaWatched(item, watched, mediaStore)
+}
+const localFileForMedia = (item: MediaLibraryItem) => {
+  if (item.tmdbId || item.metadataSource === 'ai-tmdb') return undefined
+  return [...(item.driveFiles || []), ...(item.seasons || []).flatMap(season => (season.episodes || []).flatMap(episode => episode.driveFiles || []))].find(file => file.driveId === 'local' || file.driveServerId === 'local')
+}
 const getItemDisplayImage = (item: MediaLibraryItem) => {
   return posterType.value === 'landscape'
     ? (item.backdropUrl || item.posterUrl || '')
@@ -1865,7 +1917,7 @@ const contextMenuIsFavorite = computed(() => {
 
 const contextMenuIsWatched = computed(() => {
   if (!contextMenuItem.value || typeof mediaStore.isWatched !== 'function') return false
-  return mediaStore.isWatched(contextMenuItem.value.id)
+  return isMediaWatched(contextMenuItem.value, mediaStore.watchedItems)
 })
 
 const contextMenuInPlaylist = computed(() => {
@@ -1902,12 +1954,43 @@ const openMedia = (item: MediaLibraryItem) => {
   showingDetail.value = true
 }
 
+const handleBrowserFileAction = async (action: string, file: IAliGetFileModel) => {
+  const target = mediaStore.mediaItems.find(item => [...(item.driveFiles || []), ...(item.seasons || []).flatMap(season => (season.episodes || []).flatMap(episode => episode.driveFiles || []))].some(candidate => candidate.id === file.file_id || candidate.path === file.file_id))
+  if (file.isDir && action === 'favorite') { mediaStore.addFolder({ id: file.drive_id + '_' + file.file_id, fileId: file.file_id, name: file.name, path: file.file_id, userId: mediaPanTreeStore.user_id, driveId: file.drive_id, driveServerId: file.drive_id, scanDate: new Date(), itemCount: 0 }); return }
+  if (['play', 'loop', 'shuffle'].includes(action)) {
+    if (file.isDir) { const folder = mediaStore.folders.find(folder => folder.fileId === file.file_id); if (folder) await playBrowse(action as 'play' | 'loop' | 'shuffle', folder.id); else message.warning(t('mediaLibrary.noPlayableVideo')); }
+    else await menuOpenFile(file, '', { playlistLoop: action === 'loop' })
+    return
+  }
+  if (action === 'series') { openCustomSeries({ id: target?.id || JSON.stringify([mediaPanTreeStore.user_id, file.drive_id, file.file_id]), title: target?.name || file.name }); return }
+  if (!target) { message.warning(t('fileContext.requiresScan')); return }
+  contextMenuItem.value = target
+  if (action === 'share') openMediaShare({ id: target.id, title: target.name, year: target.year, overview: target.overview, files: target.driveFiles })
+  else if (action === 'metadata') openManualMetadataEditor()
+  else if (action === 'continue') { mediaStore.addToContinueWatching(target); handleContextMenuClose() }
+  else if (action === 'playlist') showPlaylistPicker()
+}
 const openContextMenu = (event: MouseEvent, item: MediaLibraryItem) => {
   contextMenuItem.value = item
   contextMenuPosition.value = { x: event.clientX, y: event.clientY }
   showContextMenu.value = true
 }
 
+const handlePosterAction = (action: PosterAction) => {
+ if (action === 'share' && contextMenuItem.value) { const item = contextMenuItem.value; openMediaShare({ id: item.id, title: item.name, year: item.year, overview: item.overview, files: item.driveFiles }); handleContextMenuClose(); return }
+ if (action === 'rating' && contextMenuItem.value) { openPersonalRating(contextMenuItem.value); handleContextMenuClose(); return }
+ if (action === 'play' || action === 'loop' || action === 'shuffle') { void playFromMenu(action === 'loop', action === 'shuffle'); return }
+ if (action === 'download' && contextMenuItem.value) { void downloadMediaItem(contextMenuItem.value); handleContextMenuClose(); return }
+ if (action === 'watched') { toggleWatchedFromMenu(); return }
+ if (action === 'series') { openSeriesFromMenu(); return }
+ if (action === 'metadata') { openManualMetadataEditor(); return }
+ if (action === 'playlist') { showPlaylistPicker(); return }
+ if (action === 'delete') { deleteMediaFromMenu(); return }
+ if (action === 'continue' && contextMenuItem.value) mediaStore.addToContinueWatching(contextMenuItem.value)
+ if (action === 'select' && contextMenuItem.value) { localSelection.value = true; if (!selectedBrowseIds.value.includes(contextMenuItem.value.id)) selectedBrowseIds.value.push(contextMenuItem.value.id) }
+ handleContextMenuClose()
+}
+const openSeriesFromMenu = () => { if (contextMenuItem.value) openCustomSeries({ id: contextMenuItem.value.id, title: contextMenuItem.value.name }); handleContextMenuClose() }
 const handleContextMenuClose = () => {
   showContextMenu.value = false
   contextMenuItem.value = null
@@ -1921,7 +2004,7 @@ const toggleFavoriteFromMenu = () => {
 
 const toggleWatchedFromMenu = () => {
   if (!contextMenuItem.value || typeof mediaStore.markWatched !== 'function') return
-  mediaStore.markWatched(contextMenuItem.value.id, !contextMenuIsWatched.value)
+  toggleLocalMediaWatched(contextMenuItem.value)
   handleContextMenuClose()
 }
 
@@ -1991,28 +2074,32 @@ const saveManualMetadata = (updated: MediaLibraryItem) => {
 }
 
 const getBaseMediaId = (item: MediaLibraryItem) => {
+  if (mediaStore.mediaItems.some(media => media.id === item.id)) return item.id
   const parts = String(item.id).split('_')
-  if (parts.length >= 3) return parts.slice(0, -2).join('_')
+  if (item.type === 'tv' && /_\d+_\d+$/.test(item.id)) return parts.slice(0, -2).join('_')
   return item.id
 }
 
 const deleteMediaFromMenu = () => {
-  if (!contextMenuItem.value) return
-  const baseId = getBaseMediaId(contextMenuItem.value)
+  const target = contextMenuItem.value
+  if (!target) return
+  handleContextMenuClose()
+  Modal.confirm({ title: t('posterMenu.deleteConfirm'), content: t('posterMenu.deleteRecordOnly', { title: target.name }), onOk: () => {
+  const baseId = getBaseMediaId(target)
   mediaStore.removeMediaItem(baseId)
   if (typeof mediaStore.removeFromContinueWatching === 'function') {
-    mediaStore.removeFromContinueWatching(contextMenuItem.value.id)
+    mediaStore.removeFromContinueWatching(target.id)
   }
   if (typeof mediaStore.removeFromFavorites === 'function') {
-    mediaStore.removeFromFavorites(contextMenuItem.value.id)
+    mediaStore.removeFromFavorites(target.id)
   }
   if (typeof mediaStore.removeFromPlaylists === 'function') {
-    mediaStore.removeFromPlaylists(contextMenuItem.value.id)
+    mediaStore.removeFromPlaylists(target.id)
   }
   if (typeof mediaStore.removeWatchedByPrefix === 'function') {
     mediaStore.removeWatchedByPrefix(baseId)
   }
-  handleContextMenuClose()
+  } })
 }
 
 // 返回媒体库列表
@@ -2100,10 +2187,13 @@ const getListCardStyle = (item: any) => {
   const covers = getDeterministicCoverImages(item)
   const gradient = getSeededGradient(item.name, item.type || 'genre')
   if (covers.length > 0) {
-    const coverUrl = covers[0]
+    const sourceUrl = item.items?.find((media: MediaLibraryItem) => media.backdropUrl)?.backdropUrl || covers[0]
+    // Wide Retina banners need the source image, not a stretched poster thumbnail.
+    // Only upgrade TMDB image routes; preserve other providers' URL semantics.
+    const coverUrl = sourceUrl.replace(/(\/api\/tmdb\/image\/|\/t\/p\/)w\d+\//, '$1original/')
     return {
-      backgroundImage: `${gradient}, url(${coverUrl})`,
-      backgroundSize: '100% 100%, auto 100%',
+      backgroundImage: `${gradient.replace(/#[0-9a-f]{6}/gi, color => color + '40')}, url(${coverUrl})`,
+      backgroundSize: '100% 100%, cover',
       backgroundPosition: 'center center, center center',
       backgroundRepeat: 'no-repeat, no-repeat'
     }
@@ -2300,7 +2390,29 @@ const resolvePlayableMediaItem = (item: MediaLibraryItem) => {
   return { aliFile, entry: buildPlaylistEntry(aliFile, item.name) }
 }
 
-const playPlaylist = async (playlistName: string) => {
+function shuffleInPlace<T>(items: T[]): void {
+  for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]] }
+}
+function downloadableMediaFiles(item: MediaLibraryItem): DriveFileItem[] {
+  const files = item.type === 'tv' ? (item.seasons || []).flatMap(season => season.episodes || []).flatMap(episode => episode.driveFiles || []) : item.driveFiles
+  const unique = new Map<string, DriveFileItem>()
+  for (const file of files) if (file.driveId !== 'local' && file.userId && file.userId !== 'local') unique.set(JSON.stringify([file.userId, file.driveId, file.id]), file)
+  return [...unique.values()]
+}
+const mediaDownloadPending = new Set<string>()
+async function downloadMediaItem(item: MediaLibraryItem) {
+  if (mediaDownloadPending.has(item.id)) return
+  const files = downloadableMediaFiles(item)
+  if (!files.length) { message.info(t('mediaLibrary.localNoDownload')); return }
+  const settings = useSettingStore()
+  const savePath = settings.AriaIsLocal ? settings.downSavePath : settings.ariaSavePath
+  if (!savePath?.trim()) { message.error(t('posterMenu.downloadPathRequired')); return }
+  mediaDownloadPending.add(item.id)
+  try { await DownDAL.aAddDownload(files.map(buildAliFileModel), savePath, false) }
+  catch (error) { message.error(error instanceof Error ? error.message : String(error)) }
+  finally { mediaDownloadPending.delete(item.id) }
+}
+const playPlaylist = async (playlistName: string, loop = false, shuffle = false) => {
   const ids = mediaStore.playlists[playlistName] || []
   const playable = ids
     .map((id) => resolvePlayablePlaylistItem(id))
@@ -2311,17 +2423,19 @@ const playPlaylist = async (playlistName: string) => {
     return
   }
 
+  if (shuffle) shuffleInPlace(playable)
   await menuOpenFile(playable[0].aliFile, '', {
+    playlistLoop: loop,
     customPlaylistLabel: playlistName,
     customPlaylist: playable.map((item) => item.entry)
   })
 }
 
-const playFromMenu = async () => {
+const playFromMenu = async (loop = false, shuffle = false) => {
   if (!contextMenuItem.value) return
 
   if (selectedPlaylist.value) {
-    await playPlaylist(selectedPlaylist.value)
+    await playPlaylist(selectedPlaylist.value, loop, shuffle)
     handleContextMenuClose()
     return
   }
@@ -2332,8 +2446,32 @@ const playFromMenu = async () => {
     return
   }
 
-  await menuOpenFile(playable.aliFile)
+  const episodes = contextMenuItem.value.type === 'tv'
+    ? (contextMenuItem.value.seasons || []).flatMap(season => season.episodes || []).filter(episode => episode.driveFiles?.length).map(episode => {
+      const file = buildAliFileModel(episode.driveFiles[0])
+      return buildPlaylistEntry(file, contextMenuItem.value!.name + ' · S' + episode.seasonNumber + 'E' + episode.episodeNumber)
+    }) : []
+  if (shuffle) shuffleInPlace(episodes)
+  const firstEntry = episodes[0]
+  const firstFile = firstEntry ? { ...playable.aliFile, user_id: firstEntry.user_id, drive_id: firstEntry.drive_id, file_id: firstEntry.file_id, parent_file_id: firstEntry.parent_file_id, name: firstEntry.file_name, description: firstEntry.description } as IAliGetFileModel : playable.aliFile
+  await menuOpenFile(firstFile, '', { playlistLoop: loop, ...(episodes.length ? { customPlaylistLabel: contextMenuItem.value.name, customPlaylist: episodes } : {}) })
   handleContextMenuClose()
+}
+
+function compareBrowseItems(a: MediaLibraryItem, b: MediaLibraryItem) {
+  const values = (item: MediaLibraryItem) => ({ title: item.name, fileName: item.driveFiles[0]?.name || item.seasons?.flatMap(season => season.episodes || [])[0]?.driveFiles[0]?.name, addedAt: item.addedAt, premiereDate: item.releaseDate })
+  return compareMediaBrowseValues(values(a), values(b), props.browseSort || 'fileName')
+}
+
+async function playBrowse(mode: 'play' | 'loop' | 'shuffle', folderId?: string) {
+  const { type, predicate } = getMediaPageQuery()
+  const items = await DB.getMediaLibraryPage({ type, predicate, limit: Number.MAX_SAFE_INTEGER, sort: compareBrowseItems })
+  const playable = items.filter(item => (!folderId || item.folderId === folderId)).filter(item => !effectiveBrowseSelection.value || selectedBrowseIds.value.includes(item.id)).map(resolvePlayableMediaItem).filter((item): item is NonNullable<ReturnType<typeof resolvePlayableMediaItem>> => !!item)
+  if (mode === 'shuffle') {
+    for (let i = playable.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [playable[i], playable[j]] = [playable[j], playable[i]] }
+  }
+  if (!playable.length) { message.warning(t('mediaLibrary.noPlayableVideo')); return }
+  await menuOpenFile(playable[0].aliFile, '', { customPlaylistLabel: resultBarTitle.value, customPlaylist: playable.map(item => item.entry), playlistLoop: mode === 'loop' })
 }
 
 // 显示文件夹文件列表
@@ -2570,6 +2708,12 @@ const handleGoBack = () => {
   }
 }
 
+const refreshMetadata = () => new Promise<void>(resolve => {
+ Modal.confirm({ title: t('librarySettings.refreshMetadata'), content: t('librarySettings.metadataConfirm', { count: mediaStore.mediaItems.length }), onCancel: () => resolve(), onBeforeOk: async () => {
+  try { for (const item of [...mediaStore.mediaItems]) await handleManualAIScrape(item); await mediaStore.hydrate(); resolve(); return true }
+  catch (error) { message.error(error instanceof Error ? error.message : String(error)); return false }
+ } })
+})
 const refreshLibrary = () => {
   // 清除导航堆栈
   folderNavigationStack.value = []
@@ -2586,6 +2730,7 @@ onMounted(() => {
 
 // 定义事件
 const emit = defineEmits<{
+  detailVisibilityChange: [visible: boolean]
   categoryDrillDown: [data: {
     categoryType: string
     categoryValue: string
@@ -2602,6 +2747,8 @@ const emit = defineEmits<{
   manageLibrary: []
   mediaServerNavigate: [route: any]
 }>()
+
+watch(() => showingDetail.value && !!currentMediaItem.value, visible => emit('detailVisibilityChange', visible), { immediate: true, flush: 'sync' })
 
 const localHomePosterMode = computed<LocalMediaHomePosterType>(() => {
   if (localHomePreferences.libraryPosterType === 'landscape') return 'landscape'
@@ -2652,21 +2799,21 @@ const openLocalHomeMetadataEditor = (item: MediaServerLibraryNode) => {
   manualMetadataVisible.value = true
 }
 
-const handleLocalHomeCardAction = async (item: MediaServerCardItem | MediaServerLibraryNode, action: 'watched' | 'favorite' | 'download') => {
+const handleLocalHomeCardAction = async (item: MediaServerCardItem | MediaServerLibraryNode, action: 'watched' | 'favorite' | 'download' | 'series' | 'share' | 'loop' | 'shuffle' | 'delete') => {
   if (item.id.startsWith('playlist:')) return
   const target = findLocalMediaItemById(item.id)
   if (!target) return
-  if (action === 'download') {
-    message.info(t('mediaLibrary.localNoDownload'))
-    return
-  }
+  if (action === 'share') { openMediaShare({ id: target.id, title: target.name, year: target.year, overview: target.overview, files: target.driveFiles }); return }
+  if (action === 'series') { openCustomSeries({ id: target.id, title: target.name }); return }
+  if (action === 'loop' || action === 'shuffle') { contextMenuItem.value = target; await playFromMenu(action === 'loop', action === 'shuffle'); return }
+  if (action === 'download') { await downloadMediaItem(target); return }
   if (action === 'favorite') {
     mediaStore.toggleFavorite(target.id)
     message.success(mediaStore.isFavorite(target.id) ? t('mediaLibrary.addedFavorite') : t('mediaLibrary.removedFavorite'))
     return
   }
-  const nextWatched = !mediaStore.isWatchedById(target.id)
-  mediaStore.markWatched(target.id, nextWatched)
+  const nextWatched = !isMediaWatched(target, mediaStore.watchedItems)
+  toggleLocalMediaWatched(target)
   message.success(nextWatched ? t('mediaLibrary.markedWatched') : t('mediaLibrary.markedUnwatched'))
 }
 
@@ -2832,7 +2979,7 @@ async function runMediaServerSearch(rawQuery: string) {
     mediaServerSearchGroups.value = []
     return
   }
-  const candidates = mediaServerRegistry.servers.filter((server) => !!server.baseUrl && !!server.userId)
+  const candidates = mediaServerRegistry.servers.filter((server) => server.libraryMode !== false && !!server.baseUrl && !!server.userId)
   if (candidates.length === 0) {
     mediaServerSearchGroups.value = []
     mediaServerSearchError.value = t('mediaLibrary.noSearchableServers')
@@ -2869,7 +3016,7 @@ async function runMediaServerSearch(rawQuery: string) {
 }
 
 async function loadMediaServerSuggestions() {
-  const candidates = mediaServerRegistry.servers.filter((server) => !!server.baseUrl && !!server.userId)
+  const candidates = mediaServerRegistry.servers.filter((server) => server.libraryMode !== false && !!server.baseUrl && !!server.userId)
   if (candidates.length === 0) {
     mediaServerSearchGroups.value = []
     mediaServerSearchError.value = t('mediaLibrary.noSearchableServers')
@@ -2942,13 +3089,24 @@ const mediaServerKindLabel = (kind: MediaServerLibraryNode['kind']) => {
 
 // 暴露给父组件的方法
 defineExpose({
+  posterAction: (item: MediaLibraryItem, action: PosterAction) => { contextMenuItem.value = item; handlePosterAction(action) },
+  playBrowse,
+  openMedia,
   showAddFolder,
   showFolderFiles,
-  refreshLibrary
+  folderTitle: computed(() => currentFolderInfo.value?.name || props.selectedFolder?.name || ''),
+  goFolderBack: () => { if (!folderNavigationStack.value.length) return false; handleGoBack(); return true },
+  refreshLibrary,
+  refreshMetadata
 })
 </script>
 
 <style scoped>
+.poster-playlist-picker{display:flex;flex-direction:column;gap:14px}.poster-playlist-picker label{display:flex;align-items:center;gap:10px;padding:10px;background:var(--color-fill-2);border-radius:8px}.poster-playlist-picker form{display:flex;gap:8px}.poster-selection-bar{display:flex;align-items:center;gap:16px;margin-bottom:12px}.poster-selection-bar button{border:0;background:var(--color-fill-2);padding:6px 12px;color:var(--color-text-1);border-radius:6px;cursor:pointer}
+.local-file-collection{display:grid;grid-template-columns:repeat(auto-fill,174px);gap:24px 20px;padding:20px;align-content:start}.local-file-collection-list{display:flex;flex-direction:column;gap:0;padding:0 16px}
+
+.unified-folder .folder-header{display:none}
+.unified-folder .pan-right-container{overflow:auto}
 .media-library {
   height: 100%;
   display: flex;
@@ -2987,8 +3145,9 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 200px;
-  padding: 16px;
+  height: 100%;
+  min-height: 260px;
+  padding: 0;
 }
 
 .library-controls {
@@ -3515,6 +3674,28 @@ defineExpose({
 .media-grid.media-grid-landscape {
   grid-template-columns: repeat(auto-fill, 320px);
 }
+
+.unified-category .media-list { gap: 0; padding: 0 8px; }
+.unified-category .media-list-item { position: relative; gap: 22px; padding: 12px 0; align-items: center; }
+.unified-category .media-list-item + .media-list-item::before { content: ''; position: absolute; top: 0; left: 120px; right: 0; border-top: 1px solid var(--color-border-2); }
+.unified-category .list-poster { width: 98px; min-width: 98px; height: 147px; border-radius: 8px; border: 0; box-shadow: none; }
+.unified-category .list-info { gap: 4px; padding: 0; }
+.unified-category .list-title { font-size: 16px; font-weight: 600; line-height: 1.4; }
+.unified-category .list-meta { font-size: 13px; color: var(--color-text-3); gap: 20px; }
+.unified-category .list-rating { display: inline-flex; align-items: center; gap: 4px; }
+.unified-category .list-rating .iconfont { color: #ff8b25; }
+.unified-category .list-overview { font-size: 13px; line-height: 1.4; -webkit-line-clamp: 2; }
+.unified-category .list-path { display: none; }
+.unified-category [data-selected='true'] { background: var(--color-fill-3); outline: 2px solid #ff8b25; outline-offset: -2px; border-radius: 8px; }
+
+.unified-category .media-grid.media-grid-portrait { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 22px 20px; padding: 16px; }
+.unified-category .media-poster { border-radius: 12px; border: 0; box-shadow: none; }
+.unified-category .media-info { margin-top: 6px; padding: 0; }
+.unified-category .media-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.unified-category .media-meta { font-size: 12px; }
+.unified-category .type-badge { display: none; }
+@media (max-width: 1100px) { .unified-category .media-grid.media-grid-portrait { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 800px) { .unified-category .media-grid.media-grid-portrait { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 .media-list {
   display: flex;
@@ -4925,6 +5106,12 @@ defineExpose({
   padding: 22px 24px 28px;
 }
 
+/* Unified category index has one banner layout, including year and rating groups. */
+.unified-category .category-list { padding: 0 16px 16px; gap: 10px; }
+.unified-category .category-list-card { height: 230px; flex-shrink: 0; border: 0; box-shadow: none; }
+.unified-category .category-list-content { inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.unified-category .category-list-title { font-size: 22px; }
+.unified-category .category-list-count, .unified-category .category-list-overlay { display: none; }
 /* 分类列表视图 - 横向卡片样式 */
 .category-list {
   display: flex;

@@ -7,6 +7,7 @@ import type {
   TvSeriesItemResponse
 } from '../types/media'
 import Config from '../config'
+import { fetchRankingPages } from './tmdbLibraryRecommendations'
 import { mediaFileNormalizer, type NormalizedMediaFileDescriptor } from './mediaFileNormalizer'
 import type { MediaFingerprint } from './mediaFingerprint'
 
@@ -111,6 +112,16 @@ export function tmdbImageUrl(path?: string | null, size: string = 'w500'): strin
 }
 
 export { TMDB_BASE_URL }
+
+export async function getLibraryRankings() {
+    const [movies, tv, topMovies] = await Promise.all([
+      fetchRankingPages(TMDB_BASE_URL_PROXY, '/trending/movie/day', 'movie', fetchWithRetry),
+      fetchRankingPages(TMDB_BASE_URL_PROXY, '/trending/tv/day', 'tv', fetchWithRetry),
+      fetchRankingPages(TMDB_BASE_URL_PROXY, '/movie/top_rated', 'movie', fetchWithRetry)
+    ])
+    return { daily: [...movies, ...tv], topMovies }
+  }
+
 
 export class TmdbService {
   private static instance: TmdbService

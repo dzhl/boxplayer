@@ -15,6 +15,7 @@
   "directories": { "output": "release" },
   "files": [ "dist" ],
   "extraResources": [
+    { "from": "./src/assets/fonts", "to": "./fonts"},
     { "from": "./static/engine/aria2.conf", "to": "./engine/aria2.conf"},
     { "from": "./static/crx", "to": "./crx"},
     { "from": "./scripts/clouddrive-cli.mjs", "to": "./cli/clouddrive-cli.mjs"},

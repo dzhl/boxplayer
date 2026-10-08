@@ -328,12 +328,13 @@ export async function createProxyServer(port: number) {
         proxy_url: target
       })
       const isMediaServerProxy = driveId === MEDIA_SERVER_DRIVE_ID
-      let proxyInfo: any = isMediaServerProxy ? undefined : await Db.getValueObject('ProxyInfo')
-      let proxyUrl = proxy_url || (proxyInfo && proxyInfo.proxy_url || '') || ''
+      let proxyInfo: any = isMediaServerProxy || proxy_kind === 'subtitle' ? undefined : await Db.getValueObject('ProxyInfo')
+      let proxyUrl = proxy_url || (proxy_kind !== 'subtitle' && proxyInfo && proxyInfo.proxy_url || '') || ''
       let { uiVideoQuality, securityEncType, securityFileNameAutoDecrypt } = useSettingStore()
       let selectQuality = quality || uiVideoQuality
       let subtitle_url = ''
       if (proxy_kind !== 'mpv' && proxy_kind !== 'quark-download' && shouldRefreshProxyUrl({
+        proxyKind: String(proxy_kind || ''),
         driveId,
         fileId,
         proxyUrl: String(proxyUrl || ''),
@@ -353,7 +354,7 @@ export async function createProxyServer(port: number) {
       if (!proxyUrl) {
         clientRes.writeHead(404, { 'Content-Type': 'text/plain' })
         clientRes.end()
-        await Db.deleteValueObject('ProxyInfo')
+        if (proxy_kind !== 'subtitle') await Db.deleteValueObject('ProxyInfo')
         return
       } else if (!proxyInfo && !isMediaServerProxy && proxy_kind !== 'subtitle' && proxy_kind !== 'mpv' && proxy_kind !== 'quark-download') {
         let info: FileInfo = {

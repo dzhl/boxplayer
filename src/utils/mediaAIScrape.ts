@@ -4,6 +4,7 @@ import { resolveAIProviderConfig } from './bookAI'
 import { isBoxPlayerCloudProvider, scrapeMediaWithBoxPlayerCloud, type BoxPlayerCloudMediaScrapeResult } from './boxplayerCloudAI'
 import { checkAndIncrement, isPro } from './usageLimit'
 import { TmdbService, tmdbImageUrl } from './tmdb'
+import { scrapedMediaId } from './mediaScrapeMerge'
 import { buildMediaFingerprint } from './mediaFingerprint'
 import type { DriveFileItem, MediaCollectionMovie, MediaEpisode, MediaLibraryItem, MediaLibraryTvSeriesItem, MovieItem } from '../types/media'
 
@@ -171,6 +172,9 @@ export async function manualAIScrapeItems(item: MediaLibraryItem): Promise<Media
   const scraped = results
     .map(result => result.mediaItem)
     .filter((mediaItem): mediaItem is MediaLibraryItem => !!mediaItem)
+    .map(mediaItem => mediaItem.type === item.type && mediaItem.tmdbId === item.tmdbId && mediaItem.collectionId === item.collectionId
+      ? { ...mediaItem, id: item.id, lastWatched: item.lastWatched, watchProgress: item.watchProgress, lastPlayedFileId: item.lastPlayedFileId, addedAt: item.addedAt }
+      : mediaItem)
 
   if (!scraped.length) {
     const firstError = results.find(result => result.error)?.error
@@ -182,7 +186,7 @@ export async function manualAIScrapeItems(item: MediaLibraryItem): Promise<Media
 function movieToMediaItem(movie: MovieItem, files: DriveFileItem[], folderName: string, folderId: string | undefined, folderPath: string, addedAt: Date): MediaLibraryItem {
   const collection = movie.belongs_to_collection
   const movieItem: MediaCollectionMovie = {
-    id: `${movie.id}`,
+    id: scrapedMediaId('movie', movie.id),
     parentId: folderName,
     folderId,
     folderPath,
@@ -233,7 +237,7 @@ function tvToMediaItem(tvResult: MediaLibraryTvSeriesItem, decision: MediaAIScra
     driveFiles: files
   }
   return {
-    id: `${tvResult.tv.id}`,
+    id: scrapedMediaId('tv', tvResult.tv.id),
     parentId: folderName,
     folderId,
     folderPath,
@@ -268,6 +272,7 @@ function tvToMediaItem(tvResult: MediaLibraryTvSeriesItem, decision: MediaAIScra
 
 function decorateAIScrapeItem(item: MediaLibraryItem, result: MediaAIScrapeResult, existing?: MediaLibraryItem): MediaLibraryItem {
   const preserved = existing ? {
+    ...(existing.type === item.type && existing.tmdbId === item.tmdbId && existing.collectionId === item.collectionId ? { id: existing.id } : {}),
     lastWatched: existing.lastWatched,
     watchProgress: existing.watchProgress,
     lastPlayedFileId: existing.lastPlayedFileId,

@@ -19,12 +19,28 @@ export interface MediaServerCardItem {
   provider: MediaServerType
   kind: 'movie' | 'series' | 'season' | 'episode' | 'folder' | 'person' | 'unknown'
   title: string
+  genres?: string[]
+  productionLocations?: string[]
   overview?: string
   poster?: string
   backdrop?: string
   rawType?: string
   seriesId?: string
   images?: MediaServerImageSources
+  fileName?: string
+  sortName?: string
+  createdAt?: string | number
+  criticRating?: number
+  playCount?: number
+  videoBitrate?: number
+  airTime?: string
+  studio?: string
+  artist?: string
+  officialRating?: string
+  seriesTitle?: string
+  seriesDatePlayed?: string | number
+  addedAt?: string | number
+  premiereDate?: string
   year?: number
   rating?: number
   runtimeMinutes?: number

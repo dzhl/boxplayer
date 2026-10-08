@@ -105,7 +105,7 @@ describe('mediaAIScrape', () => {
     )
 
     expect(item).toMatchObject({
-      id: '42',
+      id: 'movie_42',
       type: 'movie',
       name: 'Arrival',
       folderId: 'folder-1',

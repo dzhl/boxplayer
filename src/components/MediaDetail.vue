@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import MediaPosterPlaceholder from './MediaPosterPlaceholder.vue'
+import WatchedIndicator from './WatchedIndicator.vue'
+import { isMediaWatched, setMediaWatched } from '../utils/localWatchedState'
 import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useSettingStore } from '../store'
 import { useMediaLibraryStore } from '../store/medialibrary'
@@ -71,7 +74,7 @@ const inPlaylist = computed(() => {
 const watchedId = computed(() => currentPlaylistItemId.value || activeMediaItem.value.id)
 const isWatched = computed(() => {
   if (typeof mediaStore.isWatched !== 'function') return false
-  return mediaStore.isWatched(watchedId.value)
+  return currentPlaylistItemId.value ? mediaStore.isWatched(watchedId.value) : isMediaWatched(activeMediaItem.value, mediaStore.watchedItems)
 })
 const showPlaylistModal = ref(false)
 const showCreatePlaylist = ref(false)
@@ -768,7 +771,8 @@ onBeforeUnmount(() => {
 
 const toggleWatched = () => {
   if (typeof mediaStore.markWatched !== 'function') return
-  mediaStore.markWatched(watchedId.value, !isWatched.value)
+  if (currentPlaylistItemId.value) mediaStore.markWatched(watchedId.value, !isWatched.value)
+  else setMediaWatched(activeMediaItem.value, !isWatched.value, mediaStore)
 }
 
 // 处理图片加载错误
@@ -809,9 +813,10 @@ const getCastInitial = (name?: string): string => {
       <div class="hero-section" :style="backgroundStyle">
         <div class="hero-content">
           <div class="hero-poster">
+            <WatchedIndicator corner :watched="isWatched" />
             <img v-if="activeMediaItem.posterUrl" :src="activeMediaItem.posterUrl" :alt="activeMediaItem.name" />
             <div v-else class="poster-placeholder">
-              <IconFont name="iconfile-video" />
+              <MediaPosterPlaceholder />
             </div>
           </div>
 
@@ -965,8 +970,9 @@ const getCastInitial = (name?: string): string => {
             @click="handleCollectionMovieSelect(movie)"
           >
             <div class="episode-thumbnail">
+              <WatchedIndicator corner :watched="isMediaWatched(movie, mediaStore.watchedItems)" />
               <img v-if="movie.posterUrl" :src="movie.posterUrl" :alt="movie.name" class="episode-image" @error="handleImageError" />
-              <div v-else class="thumbnail-placeholder"><IconFont name="iconfile-video" /></div>
+              <div v-else class="thumbnail-placeholder"><MediaPosterPlaceholder /></div>
             </div>
             <div class="episode-info">
               <div class="episode-title">{{ movie.name }}</div>
@@ -1009,6 +1015,7 @@ const getCastInitial = (name?: string): string => {
             :class="{ active: currentEpisode?.episodeNumber === episode.episodeNumber }"
           >
             <div class="episode-thumbnail">
+              <WatchedIndicator corner :watched="mediaStore.isWatched(`${String(activeMediaItem.id).split('_').slice(0, -2).join('_') || activeMediaItem.id}_${episode.seasonNumber}_${episode.episodeNumber}`)" />
               <img
                 v-if="episode.stillPath || activeMediaItem.posterUrl"
                 :src="episode.stillPath || activeMediaItem.posterUrl"
@@ -1399,6 +1406,7 @@ const getCastInitial = (name?: string): string => {
 }
 
 .hero-poster {
+  position: relative;
   width: 280px;
   aspect-ratio: 2 / 3;
   border-radius: 24px;

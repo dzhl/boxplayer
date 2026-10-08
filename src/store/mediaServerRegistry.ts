@@ -165,6 +165,7 @@ const useMediaServerRegistryStore = defineStore('media-server-registry', {
       username?: string
       password?: string
       useHttps?: boolean
+  libraryMode?: boolean
       syncFlag?: boolean
       backupAddresses?: Record<string, string>
       accessToken?: string

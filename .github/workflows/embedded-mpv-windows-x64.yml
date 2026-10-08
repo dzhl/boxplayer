@@ -93,6 +93,11 @@ jobs:
           pnpm --dir native/boxplayer-mpv-texture run bundle:software
           node scripts/check-embedded-mpv-bundles.mjs win32/x64
 
+      - name: Verify native responsiveness and texture ownership
+        env:
+          BOXPLAYER_MPV_AUDIO_OUTPUT: 'null'
+        run: node native/boxplayer-mpv-texture/scripts/smoke-lifecycle.mjs
+
       - name: Diagnose native software playback
         run: node native/boxplayer-mpv-texture/scripts/smoke-playback.mjs
 

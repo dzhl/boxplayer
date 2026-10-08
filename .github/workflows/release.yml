@@ -2,9 +2,6 @@ name: Build Release
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -13,6 +10,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  media-regressions:
+    name: Verify media library regressions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10.32.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/generate-secrets.mjs --mode=local
+      - name: Verify scraping, source membership and library UI
+        run: |
+          pnpm exec vitest run \
+            src/utils/__tests__/mediaScrapePersistence.test.ts \
+            src/utils/__tests__/mediaScrapeMerge.test.ts \
+            src/utils/__tests__/mediaFileNormalizer.test.ts \
+            src/utils/__tests__/mediaScannerQueue.test.ts \
+            src/utils/__tests__/mediaLibraryDexieMigration.test.ts \
+            src/utils/__tests__/mediaAIScrape.test.ts \
+            src/utils/__tests__/mediaSourceMembership.test.ts \
+            src/utils/__tests__/mediaMetadataEditor.test.ts \
+            src/utils/__tests__/providerPagination.test.ts \
+            src/utils/__tests__/unifiedMediaScope.test.ts \
+            src/utils/__tests__/unifiedMediaLibrary.test.ts \
+            src/utils/__tests__/unifiedHomeManagement.test.ts \
+            src/utils/__tests__/mediaServerBrowseSort.test.ts
+
   linux-mpv-test:
     name: Verify Linux MPV
     uses: ./.github/workflows/mpv-linux.yml
@@ -73,7 +102,7 @@ jobs:
 
   create-release:
     name: Create Release Draft
-    needs: [linux-mpv-test, embedded-mpv-linux-test, embedded-mpv-windows-test, embedded-mpv-macos-arm64-test, embedded-mpv-macos-x64-test, electron-e2e]
+    needs: [media-regressions, linux-mpv-test, embedded-mpv-linux-test, embedded-mpv-windows-test, embedded-mpv-macos-arm64-test, embedded-mpv-macos-x64-test, electron-e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -187,6 +216,13 @@ jobs:
           name: embedded-mpv-linux-x64-candidate
           path: static/engine/linux/x64/mpv-texture
 
+      - name: Download verified Linux arm64 embedded MPV runtime
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/download-artifact@v4
+        with:
+          name: embedded-mpv-linux-arm64-candidate
+          path: static/engine/linux/arm64/mpv-texture
+
       - name: Download verified macOS arm64 embedded MPV runtime
         if: matrix.os == 'macos-14'
         uses: actions/download-artifact@v4
@@ -209,6 +245,7 @@ jobs:
             node scripts/check-embedded-mpv-bundles.mjs win32/x64
           elif [[ "${{ runner.os }}" == "Linux" ]]; then
             node scripts/check-embedded-mpv-bundles.mjs linux/x64
+            node scripts/check-embedded-mpv-bundles.mjs linux/arm64
           elif [[ "${{ matrix.os }}" == "macos-14" ]]; then
             node scripts/check-embedded-mpv-bundles.mjs darwin/arm64
           else
@@ -366,5 +403,5 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --title "BoxPlayer ${GITHUB_REF_NAME}" \
             --notes-file release-notes.md \
-            --prerelease \
+            --prerelease=false \
             --draft=false
