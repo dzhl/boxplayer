@@ -11,6 +11,25 @@ const cliAccount = provider => ({
 })
 
 describe('real cloud E2E configuration', () => {
+  it('overrides only the 123 credential without changing other provider accounts or targets', () => {
+    const config = loadRealCloudE2EConfig({
+      BOXPLAYER_E2E_ACCOUNTS_JSON: JSON.stringify({ accounts: [cliAccount('aliyun'), cliAccount('cloud123')] }),
+      BOXPLAYER_E2E_CLOUD123_ACCOUNT_JSON: JSON.stringify({ accounts: [{ ...cliAccount('cloud123'), token: { user_id: 'cloud123_fresh', access_token: 'fresh' } }] }),
+      BOXPLAYER_E2E_REQUIRED_PROVIDERS: 'aliyun,cloud123'
+    })
+    expect(config.accounts.find(account => account.tokenfrom === 'aliyun').refresh_token).toBe('aliyun-refresh')
+    expect(config.accounts.filter(account => account.tokenfrom === 'cloud123')).toHaveLength(1)
+    expect(config.accounts.find(account => account.tokenfrom === 'cloud123')).toMatchObject({ user_id: 'cloud123_fresh', access_token: 'fresh' })
+    expect(config.targets.map(target => target.provider)).toEqual(['aliyun', 'cloud123'])
+  })
+
+  it('rejects overrides for other providers or multiple accounts', () => {
+    const base = JSON.stringify({ accounts: [cliAccount('aliyun')] })
+    for (const accounts of [[cliAccount('quark')], [cliAccount('cloud123'), cliAccount('aliyun')]]) {
+      expect(() => parseRealCloudAccounts(base, JSON.stringify({ accounts }))).toThrow('必须只包含一个 cloud123 账号')
+    }
+  })
+
   it('normalizes the existing clouddrive-cli token export', () => {
     const [account] = parseRealCloudAccounts(JSON.stringify({ accounts: [cliAccount('quark')] }))
     expect(account).toMatchObject({ tokenfrom: 'quark', user_id: 'quark_ci', refresh_token: 'quark-refresh', default_drive_id: '' })

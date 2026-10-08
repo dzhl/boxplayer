@@ -93,7 +93,7 @@ function configureRealCloudMpv(userData: string): void {
 async function seedRealCloudAccounts(page: Page, provider?: string): Promise<void> {
   const value = process.env.BOXPLAYER_E2E_ACCOUNTS_JSON
   if (!value?.trim()) return
-  const parsedAccounts = parseRealCloudAccounts(value)
+  const parsedAccounts = parseRealCloudAccounts(value, process.env.BOXPLAYER_E2E_CLOUD123_ACCOUNT_JSON)
   // The main drive view bootstraps most reliably from the Aliyun account. Keep
   // it as a stable anchor, then inject only the provider under test so unrelated
   // OAuth refreshes cannot invalidate another provider's rotating token.
