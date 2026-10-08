@@ -26,7 +26,7 @@ export interface BoxPlayerFixture {
   mediaServer?: RealMediaServerFixture
 }
 
-function sanitizeConsoleText(value: string): string {
+export function sanitizeConsoleText(value: string): string {
   return value
     .replace(/([?&](?:access_token|refresh_token|provider_token|provider_refresh_token|api_key|apikey|key|token|x-oss-signature|x-amz-signature|x-amz-credential)=)[^&#\s)]+/gi, '$1[redacted]')
     .replace(/(["']?(?:access_token|refresh_token|provider_token|provider_refresh_token|authorization|cookie|set-cookie|signature)["']?\s*:\s*["'])[^"'\r\n]+(["'])/gi, '$1[redacted]$2')
@@ -338,7 +338,10 @@ export const test = base.extend<{ boxPlayer: BoxPlayerFixture }, { realAccountRe
         // Playwright transport and makes an otherwise-passing worker time out.
         await app.evaluate(({ app: electronApp, BrowserWindow }) => {
           for (const window of BrowserWindow.getAllWindows()) window.removeAllListeners('close')
-          electronApp.quit()
+          // Return the evaluate reply before quit closes the transport or
+          // waits for native MPV threads. Otherwise teardown can hang even
+          // after every test assertion has passed (observed on Linux ARM64).
+          setTimeout(() => electronApp.quit(), 0)
         }).catch(() => undefined)
         if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) {
           await Promise.race([
