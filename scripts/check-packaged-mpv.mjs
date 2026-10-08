@@ -57,7 +57,7 @@ export function verifyPackagedMpv(releaseDir, platform, arch, options = {}) {
 
   const directory = targets[0]
   const manifest = JSON.parse(readFileSync(path.join(directory, 'mpv-bundle-manifest.json'), 'utf8'))
-  const expectedRenderer = platform === 'darwin' ? 'texture' : 'software'
+  const expectedRenderer = platform === 'darwin' ? 'texture' : 'texture-with-software-fallback'
   if (manifest.platform !== platform || manifest.arch !== arch || manifest.renderer !== expectedRenderer) {
     throw new Error(`Wrong packaged MPV manifest target or renderer: ${JSON.stringify({ platform: manifest.platform, arch: manifest.arch, renderer: manifest.renderer })}`)
   }

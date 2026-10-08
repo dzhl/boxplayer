@@ -27,7 +27,48 @@ function macFixture(arch) {
   return { releaseDir, resources, directory }
 }
 
+function desktopFixture(platform, arch) {
+  const releaseDir = mkdtempSync(path.join(tmpdir(), 'boxplayer-packaged-mpv-'))
+  const directory = path.join(releaseDir, `${platform}-unpacked`, 'resources', 'engine', platform, arch, 'mpv-texture')
+  mkdirSync(directory, { recursive: true })
+  const binary = Buffer.alloc(128)
+  if (platform === 'linux') {
+    binary.write('\x7fELF', 0, 'ascii')
+    binary[4] = 2
+    binary[5] = 1
+    binary.writeUInt16LE(arch === 'x64' ? 62 : 183, 18)
+  } else {
+    binary.write('MZ', 0, 'ascii')
+    binary.writeUInt32LE(64, 0x3c)
+    binary.write('PE\0\0', 64, 'ascii')
+    binary.writeUInt16LE(0x8664, 68)
+  }
+  const names = ['mpv_texture.node', platform === 'linux' ? 'libmpv.so.2' : 'libmpv-2.dll', ...(platform === 'linux' ? ['mpv-node-host', 'mpv-host.cjs'] : [])]
+  const files = names.map(name => {
+    const contents = name === 'mpv-host.cjs' ? Buffer.from('// fixture host') : binary
+    writeFileSync(path.join(directory, name), contents)
+    return { name, bytes: contents.length, sha256: createHash('sha256').update(contents).digest('hex') }
+  })
+  writeFileSync(path.join(directory, 'mpv-bundle-manifest.json'), JSON.stringify({ platform, arch, renderer: 'texture-with-software-fallback', files }))
+  return { releaseDir, directory }
+}
+
 describe('packaged MPV acceptance', () => {
+  it.each([['linux', 'x64'], ['linux', 'arm64'], ['win32', 'x64']])('verifies the current %s/%s texture renderer with software fallback', (platform, arch) => {
+    const { releaseDir, directory } = desktopFixture(platform, arch)
+    expect(verifyPackagedMpv(releaseDir, platform, arch)).toBe(directory)
+    writeFileSync(path.join(directory, 'mpv_texture.node'), Buffer.from('corrupted'))
+    expect(() => verifyPackagedMpv(releaseDir, platform, arch)).toThrow('Packaged MPV dependency changed')
+  })
+
+  it('rejects the obsolete software-only manifest for a current Linux candidate', () => {
+    const { releaseDir, directory } = desktopFixture('linux', 'x64')
+    const manifestPath = path.join(directory, 'mpv-bundle-manifest.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, renderer: 'software' }))
+    expect(() => verifyPackagedMpv(releaseDir, 'linux', 'x64')).toThrow('Wrong packaged MPV manifest target or renderer')
+  })
+
   it('declares every desktop release target', () => {
     expect(PACKAGED_TARGETS).toEqual([
       ['darwin', 'x64'],
