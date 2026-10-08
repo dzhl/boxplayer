@@ -664,8 +664,8 @@ watch(() => registry.servers.map(server => `${server.id}:${server.baseUrl}:${ser
         <button :class="{ selected: section === 'collection' && selectedHomeRowKey === 'local:top-rated' }" @click="showHomeRow('local:top-rated')"><Star :size="18" /><span>{{ t('unified.topMovies') }}</span></button>
         <button v-for="item in categories" :key="item.key" :class="{ selected: section === 'video' && !selectedFolder && selectedCategory === item.key }" @click="showCategory(item.key)"><component :is="item.icon" :size="18" /><span>{{ item.title }}</span></button>
         <button :class="{ selected: section === 'collection' && selectedHomeRowKey.startsWith('custom-series') }" @click="showCustomSeries()"><GalleryVerticalEnd :size="18" /><span>{{ t('unified.series') }}</span></button>
-        <button :class="{ selected: section === 'music' }" @click="app.mediaLibrarySection = 'music'"><Music :size="18" /><span>{{ t('nav.music') }}</span></button>
-        <button :class="{ selected: section === 'book' }" @click="app.mediaLibrarySection = 'book'"><BookOpen :size="18" /><span>{{ t('nav.books') }}</span></button>
+        <button data-testid="unified-nav-music" :class="{ selected: section === 'music' }" @click="app.mediaLibrarySection = 'music'"><Music :size="18" /><span>{{ t('nav.music') }}</span></button>
+        <button data-testid="unified-nav-book" :class="{ selected: section === 'book' }" @click="app.mediaLibrarySection = 'book'"><BookOpen :size="18" /><span>{{ t('nav.books') }}</span></button>
 
       </div>
       <div class="group-header"><button class="group-heading" :class="{ selected: section === 'files' }" @click="app.mediaLibrarySection = 'files'"><Folder :size="20" /><span>{{ t('unified.files') }}</span></button><button class="group-toggle" :aria-expanded="expanded.files" :aria-label="t('unified.expandGroup', { name: t('unified.files') })" @click="expanded.files = !expanded.files"><ChevronDown :size="14" /></button></div>
@@ -821,8 +821,8 @@ watch(() => registry.servers.map(server => `${server.id}:${server.baseUrl}:${ser
         </KeepAlive>
         <KeepAlive>
           <ServerWorkspace ref="serverWorkspace" v-if="section === 'server' || section === 'home'" v-show="section === 'server'" :unified-root="isServerRootPage" :root-selection="serverRootSelection" :unified-browse="isCategoryPage" :browse-mode="collectionMode" :server-sort="serverSort" :server-sort-direction="serverSortDirection" :server-sort-seed="serverSortSeed" />
-          <MusicLibrary v-else-if="section === 'music'" ref="musicView" :sidebar-visible="toolsVisible" />
-          <BookLibrary v-else-if="section === 'book'" ref="bookView" :sidebar-visible="toolsVisible" />
+          <MusicLibrary v-else-if="section === 'music'" ref="musicView" data-testid="unified-section-music" :sidebar-visible="toolsVisible" />
+          <BookLibrary v-else-if="section === 'book'" ref="bookView" data-testid="unified-section-book" :sidebar-visible="toolsVisible" />
         </KeepAlive>
       </div>
     </main>

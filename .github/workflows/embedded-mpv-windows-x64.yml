@@ -107,6 +107,9 @@ jobs:
       - name: Verify visible playback in production Electron entry
         env:
           BOXPLAYER_MPV_REQUIRE_E2E: '1'
+          # Hosted runners have no guaranteed audio endpoint. Still decode and
+          # switch audio tracks, using the same null sink as Linux/macOS gates.
+          BOXPLAYER_MPV_AUDIO_OUTPUT: 'null'
         run: |
           pnpm run pretest:e2e
           pnpm exec playwright test e2e/embeddedMpvPlayback.spec.ts e2e/embeddedMpvWindowsCdp.spec.ts e2e/embeddedMpvControlsCdp.spec.ts --workers=1

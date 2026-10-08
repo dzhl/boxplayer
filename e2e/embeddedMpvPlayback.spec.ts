@@ -247,6 +247,10 @@ test('MPV equalizers retain dragged values and settings fit the panel', async ({
   const player = await playerPromise
   try {
     await expect(player.locator('#mpvEmbeddedPlayer')).toBeVisible({ timeout: 30_000 })
+    // This checks settings/track changes, not EOF handling. Keep the short
+    // fixture loaded while slow CI runners exercise the controls.
+    await expect.poll(async () => (await player.evaluate(() => window.WebMpvEmbeddedStatus())).status?.duration || 0, { timeout: 20_000 }).toBeGreaterThan(0)
+    expect((await player.evaluate(() => window.WebMpvEmbeddedControl({ action: 'pause' }))).ok).toBe(true)
     await player.locator('#mpvEmbeddedPlayer').hover()
     await player.getByRole('button', { name: '设置', exact: true }).click()
 

@@ -28,6 +28,7 @@ jobs:
       - name: Verify scraping, source membership and library UI
         run: |
           pnpm exec vitest run \
+            electron/main/core/__tests__/embeddedMpvPreloadSession.test.ts \
             src/utils/__tests__/mediaScrapePersistence.test.ts \
             src/utils/__tests__/mediaScrapeMerge.test.ts \
             src/utils/__tests__/mediaFileNormalizer.test.ts \

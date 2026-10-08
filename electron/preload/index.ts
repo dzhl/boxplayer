@@ -281,9 +281,9 @@ function normalizeMpvEmbeddedLoadData(data: any) {
 
 let currentMpvSessionId = ''
 window.WebMpvEmbeddedLoad = async function(data: any) {
-  currentMpvSessionId = String(data?.sessionId || '')
+  currentMpvSessionId = String(data?.sessionId || crypto.randomUUID())
   try {
-    return await ipcRenderer.invoke('MpvEmbedded:load', normalizeMpvEmbeddedLoadData(data))
+    return await ipcRenderer.invoke('MpvEmbedded:load', normalizeMpvEmbeddedLoadData({ ...data, sessionId: currentMpvSessionId }))
   } catch (error: any) {
     return { ok: false, error: error?.message || 'mpv embedded load ipc failed' }
   }
