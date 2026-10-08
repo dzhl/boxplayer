@@ -334,26 +334,23 @@ export const test = base.extend<{ boxPlayer: BoxPlayerFixture }, { realAccountRe
         // otherwise app.quit() is cancelled on Windows, the forced kill leaves
         // Chromium profile files locked, and Playwright's worker cannot tear
         // down even though every real-provider playback assertion passed.
-        // Do not race app.close(): the abandoned close promise retains the
-        // Playwright transport and makes an otherwise-passing worker time out.
-        await app.evaluate(({ app: electronApp, BrowserWindow }) => {
+        await app.evaluate(({ BrowserWindow }) => {
           for (const window of BrowserWindow.getAllWindows()) window.removeAllListeners('close')
-          // Return the evaluate reply before quit closes the transport or
-          // waits for native MPV threads. Otherwise teardown can hang even
-          // after every test assertion has passed (observed on Linux ARM64).
-          setTimeout(() => electronApp.quit(), 0)
         }).catch(() => undefined)
-        if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) {
-          await Promise.race([
-            new Promise<void>((resolve) => electronProcess.once('exit', () => resolve())),
-            new Promise<void>((resolve) => setTimeout(resolve, 5_000))
-          ])
-        }
-      } else {
-        await Promise.race([
-          app.close(),
-          new Promise<void>((resolve) => setTimeout(resolve, 5_000))
-        ])
+      }
+      // Playwright owns both Chromium and Node inspector connections. Calling
+      // app.quit() ourselves leaves its Node transport attached, which can hang
+      // worker teardown even when Electron's windows have closed. Await the
+      // public close API; a watchdog kills only this isolated test process if
+      // native shutdown stalls, letting close settle without abandoning it.
+      const shutdownWatchdog = setTimeout(() => {
+        if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) electronProcess.kill('SIGKILL')
+      }, 5_000)
+      shutdownWatchdog.unref()
+      try {
+        await app.close().catch(() => undefined)
+      } finally {
+        clearTimeout(shutdownWatchdog)
       }
       if (electronProcess && electronProcess.exitCode === null && !electronProcess.killed) {
         electronProcess.kill('SIGKILL')
