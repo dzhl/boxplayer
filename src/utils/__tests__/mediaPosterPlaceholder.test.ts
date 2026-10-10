@@ -17,7 +17,8 @@ describe('shared poster placeholder', () => {
     expect(component).toContain('width: 34.5% !important')
     expect(component).toContain('aspect-ratio: 120 / 88')
     expect(component).toContain('position: static !important')
-    expect(component).toContain('<span v-if="kind === \'film\'" class="media-poster-placeholder-icon"')
+    expect(component).toContain('<span v-else-if="kind === \'film\'" class="media-poster-placeholder-icon"')
+    expect(component).toContain('v-if="kind === \'resume\'"')
     expect(component).toContain('v-html="filmIcon"')
   })
 

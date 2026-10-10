@@ -139,7 +139,8 @@
                   @contextmenu.prevent="openContextMenu($event, item)"
                 >
                   <div class="media-poster">
-                    <WatchedIndicator corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
+                    <WatchedIndicator v-if="!isContinueWatchingView" corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
+                    <PosterRatingBadge :rating="item.rating" />
                     <img
                       v-if="item.posterUrl"
                       :src="item.posterUrl"
@@ -147,7 +148,7 @@
                       @error="handleImageError"
                     />
                     <div v-else class="poster-placeholder">
-                      <MediaPosterPlaceholder />
+                      <MediaPosterPlaceholder :kind="isContinueWatchingView ? 'resume' : 'film'" />
                     </div>
 
                     <div v-if="isContinueWatchingView && item.watchProgress !== undefined" class="watch-progress">
@@ -157,9 +158,6 @@
                       ></div>
                     </div>
 
-                    <div v-if="item.rating" class="rating-badge">
-                      {{ item.rating.toFixed(1) }}
-                    </div>
 
                     <div class="type-badge">
                       {{ item.type === 'movie' ? t('mediaLibrary.typeMovie') : item.type === 'tv' ? t('mediaLibrary.typeTv') : t('mediaLibrary.typeUnmatched') }}
@@ -199,7 +197,8 @@
                   @contextmenu.prevent="openContextMenu($event, item)"
                 >
                   <div class="list-poster">
-                    <WatchedIndicator corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
+                    <WatchedIndicator v-if="!isContinueWatchingView" corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
+                    <PosterRatingBadge :rating="item.rating" />
                     <img
                       v-if="item.posterUrl"
                       :src="item.posterUrl"
@@ -207,7 +206,7 @@
                       @error="handleImageError"
                     />
                     <div v-else class="poster-placeholder">
-                      <MediaPosterPlaceholder />
+                      <MediaPosterPlaceholder :kind="isContinueWatchingView ? 'resume' : 'film'" />
                     </div>
                     <div v-if="getCoverageBadge(item)" class="media-coverage-badge" :title="getCoverageBadge(item)">
                       <span>!</span>{{ getCoverageBadge(item) }}
@@ -222,8 +221,13 @@
                           {{ getEpisodeTitleSuffix(item) }}
                         </span>
                       </h3>
+                      <div class="list-meta">
+                        <span v-if="item.rating != null" class="list-rating"><IconFont name="iconstar" />{{ item.rating.toFixed(1) }}</span>
+                        <span v-if="item.year">{{ item.year }}</span>
+                        <span v-if="item.certification">{{ item.certification }}</span>
+                      </div>
                       <p v-if="item.overview" class="list-overview">
-                        {{ item.overview.length > 120 ? item.overview.substring(0, 120) + '...' : item.overview }}
+                        {{ item.overview }}
                       </p>
                       <p v-if="item.type === 'unmatched' && getUnmatchedPath(item)" class="list-path" :title="getUnmatchedPath(item)">
                         {{ getUnmatchedPath(item) }}
@@ -234,15 +238,6 @@
                       <p v-if="isContinueWatchingView && item.watchProgress !== undefined" class="list-progress">
                         {{ t('mediaLibrary.watchedPercent', { percent: Math.round((item.watchProgress || 0) * 100) }) }}
                       </p>
-                    </div>
-
-                    <WatchedIndicator :watched="isMediaWatched(item, mediaStore.watchedItems)" @toggle="toggleLocalMediaWatched(item)" />
-                    <div class="list-meta">
-                      <span class="list-type">{{ item.type === 'movie' ? t('mediaLibrary.typeMovie') : item.type === 'tv' ? t('mediaLibrary.typeTv') : t('mediaLibrary.typeUnmatched') }}</span>
-                      <span v-if="item.year" class="list-year">{{ item.year }}</span>
-                      <span v-if="item.rating" class="list-rating">
-                        ⭐ {{ item.rating.toFixed(1) }}
-                      </span>
                     </div>
 
                     <WatchedIndicator :watched="isMediaWatched(item, mediaStore.watchedItems)" @toggle="toggleLocalMediaWatched(item)" />
@@ -507,7 +502,8 @@
             @contextmenu.prevent="openContextMenu($event, item)"
           >
             <div class="media-poster" :class="{ 'has-image': !!getItemDisplayImage(item) }">
-              <WatchedIndicator corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
+              <WatchedIndicator v-if="!isContinueWatchingView" corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
+              <PosterRatingBadge :rating="item.rating" />
               <img
                 v-if="getItemDisplayImage(item)"
                 :src="getItemDisplayImage(item)"
@@ -516,7 +512,7 @@
                 @error="handleImageError"
               />
               <div class="poster-placeholder">
-                <MediaPosterPlaceholder />
+                <MediaPosterPlaceholder :kind="isContinueWatchingView ? 'resume' : 'film'" />
               </div>
 
               <div v-if="isContinueWatchingView && item.watchProgress !== undefined" class="watch-progress">
@@ -577,7 +573,8 @@
               class="list-poster"
               :class="{ 'has-image': !!getItemDisplayImage(item) }"
             >
-              <WatchedIndicator corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
+              <WatchedIndicator v-if="!isContinueWatchingView" corner :watched="isMediaWatched(item, mediaStore.watchedItems)" />
+              <PosterRatingBadge :rating="item.rating" />
               <img
                 v-if="getItemDisplayImage(item)"
                 :src="getItemDisplayImage(item)"
@@ -586,7 +583,7 @@
                 @error="handleImageError"
               />
               <div class="poster-placeholder">
-                <MediaPosterPlaceholder />
+                <MediaPosterPlaceholder :kind="isContinueWatchingView ? 'resume' : 'film'" />
               </div>
               <div class="type-badge">
                 {{ getItemTypeLabel(item) }}
@@ -618,8 +615,7 @@
               <div v-if="props.unifiedBrowse" class="list-meta unified-list-meta">
                 <span v-if="item.rating != null" class="list-rating"><IconFont name="iconstar" />{{ item.rating.toFixed(1) }}</span>
                 <span v-if="item.year">{{ item.year }}</span>
-                <span v-if="item.productionCountries?.length">{{ item.productionCountries.join(', ') }}</span>
-                <span v-if="item.genres?.length">{{ item.genres.join(', ') }}</span>
+                <span v-if="item.certification" class="list-certification">{{ item.certification }}</span>
               </div>
               <div v-else-if="getItemMetaItems(item).length" class="list-meta">
                 <span
@@ -646,7 +642,8 @@
                 </p>
               </div>
 
-              <div v-if="item.genres.length" class="list-genres">
+              <WatchedIndicator :watched="isMediaWatched(item, mediaStore.watchedItems)" @toggle="toggleLocalMediaWatched(item)" />
+              <div v-if="!props.unifiedBrowse && item.genres.length" class="list-genres">
                 <span v-for="genre in item.genres.slice(0, 5)" :key="genre" class="genre-tag">
                   {{ genre }}
                 </span>
@@ -736,6 +733,8 @@ import MediaPosterMenu from './MediaPosterMenu.vue'
 import type { PosterAction } from '../utils/mediaPosterMenu'
 import LocalMediaFileCard from './LocalMediaFileCard.vue'
 import WatchedIndicator from './WatchedIndicator.vue'
+import { useLibraryBrowseMode } from '../store/libraryBrowseMode'
+import PosterRatingBadge from './PosterRatingBadge.vue'
 import { isMediaWatched, localWatchedKeys, setMediaWatched } from '../utils/localWatchedState'
 import MediaPanRight from './MediaPanRight.vue'
 import { useMediaPanFileStore, useMediaPanTreeStore } from './stores'
@@ -875,7 +874,7 @@ const selectedPersonId = ref<number>()
 const selectedCountry = ref('')
 const selectedPlaylist = ref('')
 const localSearchQuery = ref(props.searchQuery || '')
-const viewMode = ref<'grid' | 'list'>('grid') // 添加视图模式状态
+const viewMode = useLibraryBrowseMode()
 const posterType = ref<'portrait' | 'landscape'>('portrait')
 watch(() => props.browseMode, mode => { if (mode) viewMode.value = mode }, { immediate: true })
 const showingDetail = ref(false)
@@ -1188,7 +1187,7 @@ const showPlaylistView = computed(() => {
 
 const isContinueWatchingView = computed(() => {
   const category = props.activeCategory || activeTab.value
-  return category === 'continue-watching'
+  return category === 'continue-watching' || category === 'continue'
 })
 
 const documentaryItems = computed(() => mediaStore.mediaItems.filter((item) => {
@@ -3118,10 +3117,11 @@ defineExpose({
 .unified-category .list-poster { width: 98px; min-width: 98px; height: 147px; border-radius: 8px; border: 0; box-shadow: none; }
 .unified-category .list-info { gap: 4px; padding: 0; }
 .unified-category .list-title { font-size: 16px; font-weight: 600; line-height: 1.4; }
-.unified-category .list-meta { font-size: 13px; color: var(--color-text-3); gap: 20px; }
+.unified-category .list-meta { font-size: 13px; color: var(--color-text-3); gap: 8px; }
 .unified-category .list-rating { display: inline-flex; align-items: center; gap: 4px; }
-.unified-category .list-rating .iconfont { color: #ff8b25; }
-.unified-category .list-overview { font-size: 13px; line-height: 1.4; -webkit-line-clamp: 2; }
+.unified-category .list-rating .iconfont { color: inherit; }
+.unified-category .list-overview { font-size: 13px; line-height: 1.4; -webkit-line-clamp: 3; }
+.unified-category .list-certification { border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; font-size: 11px; line-height: 1.2; }
 .unified-category .list-path { display: none; }
 .unified-category [data-selected='true'] { background: var(--color-fill-3); outline: 2px solid #ff8b25; outline-offset: -2px; border-radius: 8px; }
 
@@ -3527,6 +3527,7 @@ defineExpose({
 }
 
 .list-poster {
+  position: relative;
   width: 170px;
   min-width: 170px;
   aspect-ratio: 2 / 3;

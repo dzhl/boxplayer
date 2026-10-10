@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import MediaPosterPlaceholder from './MediaPosterPlaceholder.vue'
+import PosterRatingBadge from './PosterRatingBadge.vue'
+import { Star } from 'lucide-vue-next'
 import { ref, onMounted, onUnmounted } from 'vue'
 import WatchedIndicator from './WatchedIndicator.vue'
 import MediaPosterMenu from './MediaPosterMenu.vue'
@@ -12,6 +14,7 @@ withDefaults(defineProps<{ row: UnifiedLibraryRow; mode?: 'horizontal' | 'grid' 
 const menuCard = ref<UnifiedLibraryCard>()
 const position = ref({ x: 0, y: 0 })
 let clickTimer: ReturnType<typeof setTimeout> | undefined
+function toggleWatched(card: UnifiedLibraryCard) { clearTimeout(clickTimer); card.posterMenu?.action('watched') }
 function clickCard(card: UnifiedLibraryCard) { if (!card.posterMenu) { card.action(); return } clearTimeout(clickTimer); clickTimer = setTimeout(() => { clickTimer = undefined; card.action() }, 300) }
 function openMenu(event: MouseEvent, card: UnifiedLibraryCard) { if (card.contextMenu) { card.contextMenu(event); return }; if (!card.posterMenu) return; event.preventDefault(); clearTimeout(clickTimer); menuCard.value = card; position.value = { x: Math.max(8, Math.min(event.clientX, window.innerWidth - 205)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 350)) } }
 function closeMenu() { menuCard.value = undefined }
@@ -28,18 +31,33 @@ const failedImages = ref(new Set<string>())
       <button @click="row.more">{{ t('mediaServer.seeAllPlain') }}</button>
     </div>
     <div class="horizontal-row">
-      <button v-for="card in row.cards" :key="card.key" class="media-card" :class="{ landscape: row.landscape, grouped: row.grouped }" @click="clickCard(card)" @dblclick.stop="openMenu($event, card)" @contextmenu="openMenu($event, card)">
+      <div v-for="card in row.cards" :key="card.key" class="media-card" role="button" tabindex="0" :class="{ landscape: row.landscape, grouped: row.grouped }" @keydown.enter.self.prevent="clickCard(card)" @keydown.space.self.prevent="clickCard(card)" @click="clickCard(card)" @dblclick.stop="openMenu($event, card)" @contextmenu="openMenu($event, card)">
         <div class="artwork">
-          <MediaPosterPlaceholder :kind="row.key === 'music' ? 'music' : row.key === 'books' ? 'book' : 'film'" />
+          <MediaPosterPlaceholder :kind="row.key === 'resume' ? 'resume' : row.key === 'music' ? 'music' : row.key === 'books' ? 'book' : 'film'" />
           <img v-if="card.image && !failedImages.has(card.image)" :src="row.grouped ? detailBackdropUrl(card.image) : card.image" :alt="card.title" loading="lazy" @error="failedImages.add(card.image!)" />
-          <WatchedIndicator v-if="card.posterMenu && row.key !== 'resume'" corner :watched="card.posterMenu.watched" />
+          <WatchedIndicator v-if="row.key !== 'resume' && card.posterMenu" corner :watched="card.posterMenu.watched" />
+          <PosterRatingBadge :rating="card.rating" />
           <span v-if="row.key === 'resume'" class="resume-play" aria-hidden="true">▶</span>
           <progress v-if="row.key === 'resume' || (card.progress || 0) > 0" :aria-label="card.title" :value="card.progress || 0" max="100" />
           <strong v-if="row.grouped" class="group-title">{{ card.title }}</strong>
         </div>
-        <strong v-if="!row.grouped" :title="card.title">{{ card.title }}</strong>
-        <small v-if="card.subtitle">{{ card.subtitle }}</small>
-      </button>
+        <div v-if="mode === 'list' && !row.grouped && card.posterMenu" class="list-information">
+          <strong :title="card.title">{{ card.title }}</strong>
+          <div class="list-metadata">
+            <span v-if="card.rating != null" class="list-rating"><Star :size="13" fill="currentColor" />{{ card.rating.toFixed(1) }}</span>
+            <span v-if="card.subtitle">{{ card.subtitle }}</span>
+            <span v-if="card.certification" class="classification">{{ card.certification }}</span>
+          </div>
+          <p class="list-overview">{{ card.overview || t('mediaServer.noOverview') }}</p>
+          <div @click.stop @dblclick.stop @keydown.stop>
+            <WatchedIndicator :watched="card.posterMenu.watched" @toggle="toggleWatched(card)" />
+          </div>
+        </div>
+        <template v-else>
+          <strong v-if="!row.grouped" :title="card.title">{{ card.title }}</strong>
+          <small v-if="card.subtitle">{{ card.subtitle }}</small>
+        </template>
+      </div>
     </div>
     <Teleport to="body"><div v-if="menuCard?.posterMenu" class="home-poster-popup" :style="{ left: position.x + 'px', top: position.y + 'px' }" @click.stop><MediaPosterMenu hide-select :server="menuCard.posterMenu.server" :tv="menuCard.posterMenu.tv" :continuing="menuCard.posterMenu.continuing" :watched="menuCard.posterMenu.watched" :favorite="menuCard.posterMenu.favorite" :disabled="menuCard.posterMenu.disabled" @action="action => { menuCard?.posterMenu?.action(action); closeMenu() }" /></div></Teleport>
   </section>
@@ -57,6 +75,14 @@ button:focus-visible { outline: 2px solid #ff8b25; outline-offset: 2px; }
 .horizontal-row { display: flex; align-items: flex-start; gap: 24px; overflow-x: auto; padding: 3px 0 10px; scrollbar-width: none; }
 .horizontal-row::-webkit-scrollbar { display: none; }
 .media-card { width: 110px; flex-shrink: 0; text-align: left; border: 0; background: transparent; padding: 0; }
+.media-card { cursor: pointer; color: inherit; font: inherit; }
+.media-card:focus-visible { outline: 2px solid #ff8b25; outline-offset: 2px; }
+.list-information { grid-row: 1 / 3; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.list-information strong { margin: 0; font-size: 15px; max-width: 100%; }
+.list-metadata { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--color-text-3); font-size: 12px; }
+.list-rating { display: inline-flex; align-items: center; gap: 5px; }
+.classification { border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; }
+.list-overview { margin: 0; font-size: 13px; line-height: 1.4; color: var(--color-text-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .media-card.landscape { width: 280px; }
 .artwork { height: 165px; position: relative; display: grid; place-items: center; border-radius: 16px; overflow: hidden; background: var(--color-fill-2); color: var(--color-text-4); }
 .landscape .artwork { height: 158px; }
@@ -76,6 +102,7 @@ button:focus-visible { outline: 2px solid #ff8b25; outline-offset: 2px; }
 .mode-list .artwork { grid-row: 1 / 3; width: 110px; height: 165px; }
 .mode-list .landscape .artwork { width: 160px; height: 90px; }
 .mode-list strong { align-self: end; }
+.mode-list .list-information strong { align-self: auto; }
 .mode-list small { align-self: start; }
 .mode-grid:has(.landscape) .horizontal-row { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .mode-list .media-card:not(.landscape) { grid-template-columns: 110px minmax(0, 1fr); }

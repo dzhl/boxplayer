@@ -39,6 +39,7 @@ export function mergeScrapedMedia(existing: MediaLibraryItem, incoming: MediaLib
   return preserveManualMediaMetadata(existing, {
     ...existing,
     ...incoming,
+    certification: incoming.certification || existing.certification,
     id: existing.id,
     folderId: existing.folderId || incoming.folderId,
     driveFiles: mergeDriveFileSources([...(existing.driveFiles || []), ...(incoming.driveFiles || [])]),

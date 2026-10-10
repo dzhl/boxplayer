@@ -34,7 +34,8 @@
               @load="handleMediaImageLoad"
               @error="handleMediaImageError"
             />
-            <div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
+            <div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder kind="resume" /></div>
+            <PosterRatingBadge :rating="item.rating" />
             <div class="resume-overlay">
               <div class="resume-badge">{{ typeof item.progress === 'number' ? t('mediaServer.watchedPercent', { percent: Math.round(item.progress) }) : t('mediaServer.continueWatching') }}</div>
               <div v-if="typeof item.progress === 'number'" class="media-progress cinematic-progress">
@@ -76,6 +77,7 @@
 
 <script setup lang="ts">
 import MediaPosterPlaceholder from '../../MediaPosterPlaceholder.vue'
+import PosterRatingBadge from '../../PosterRatingBadge.vue'
 import type { MediaServerCardItem } from '../../../types/mediaServerContent'
 import { resolveMediaServerImage } from '../../../media-server/imageSources'
 import { toMsCacheUrl } from '../../../media-server/imageCache'

@@ -4,6 +4,9 @@ export interface UnifiedLibraryCard {
   title: string
   sortValues?: { title: string; fileName?: string; addedAt?: string | number | Date; premiereDate?: string }
   image?: string
+  rating?: number
+  overview?: string
+  certification?: string
   subtitle?: string
   /** Playback progress as a percentage from 0 to 100. */
   progress?: number

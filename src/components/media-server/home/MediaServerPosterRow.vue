@@ -47,6 +47,7 @@
               @error="handleMediaImageError"
             />
             <WatchedIndicator v-if="['movie', 'series', 'season', 'episode'].includes(item.kind)" corner :watched="item.isPlayed === true" />
+            <PosterRatingBadge :rating="item.rating" />
             <div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
             <div v-if="showTopOverlay && resolveOverlay(item)" class="poster-overlay-badge">
               {{ resolveOverlay(item) }}
@@ -80,6 +81,7 @@
             @error="handleMediaImageError"
           />
           <WatchedIndicator v-if="['movie', 'series', 'season', 'episode'].includes(item.kind)" corner :watched="item.isPlayed === true" />
+          <PosterRatingBadge :rating="item.rating" />
             <div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
           <div v-if="showTopOverlay && resolveOverlay(item)" class="poster-overlay-badge">
             {{ resolveOverlay(item) }}
@@ -107,6 +109,7 @@ import type { PosterAction } from '../../../utils/mediaPosterMenu'
 import MediaPosterPlaceholder from '../../MediaPosterPlaceholder.vue'
 import MediaPosterMenu from '../../MediaPosterMenu.vue'
 import WatchedIndicator from '../../WatchedIndicator.vue'
+import PosterRatingBadge from '../../PosterRatingBadge.vue'
 import { computed } from 'vue'
 import type { MediaServerLibraryNode } from '../../../types/mediaServerContent'
 import type { MediaServerPosterType } from '../../../store/mediaServerHomePreferences'
@@ -179,7 +182,6 @@ const resolveSubtitle = (item: MediaServerLibraryNode) => {
 }
 
 const resolveOverlay = (item: MediaServerLibraryNode) => {
-  if (typeof item.rating === 'number') return `★ ${item.rating.toFixed(1)}`
   if (item.year) return `${item.year}`
   if (item.kind === 'series') return t('mediaServer.episodes')
   if (item.kind === 'movie') return t('mediaServer.movies')

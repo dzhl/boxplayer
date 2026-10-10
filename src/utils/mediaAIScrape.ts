@@ -196,6 +196,7 @@ function movieToMediaItem(movie: MovieItem, files: DriveFileItem[], folderName: 
     posterUrl: tmdbImageUrl(movie.poster_path) || undefined,
     backdropUrl: tmdbImageUrl(movie.backdrop_path) || undefined,
     year: movie.release_date?.substring(0, 4),
+    certification: movie.certification,
     rating: movie.vote_average,
     genres: movie.genres?.map(g => g.name) || [],
     credits: movie.credits,
@@ -227,6 +228,7 @@ function tvToMediaItem(tvResult: MediaLibraryTvSeriesItem, decision: MediaAIScra
   const episode: MediaEpisode = {
     id: matchedEpisode.id,
     episodeNumber: matchedEpisode.episode_number,
+    rating: matchedEpisode.vote_average,
     seasonNumber: matchedEpisode.season_number,
     name: matchedEpisode.name,
     overview: matchedEpisode.overview,
@@ -247,6 +249,7 @@ function tvToMediaItem(tvResult: MediaLibraryTvSeriesItem, decision: MediaAIScra
     posterUrl: tmdbImageUrl(tvResult.tv.poster_path) || undefined,
     backdropUrl: tmdbImageUrl(tvResult.tv.backdrop_path) || undefined,
     year: tvResult.tv.first_air_date?.substring(0, 4),
+    certification: tvResult.tv.certification,
     rating: tvResult.tv.vote_average,
     genres: tvResult.tv.genres?.map(g => g.name) || [],
     credits: season.credits || tvResult.tv.credits,

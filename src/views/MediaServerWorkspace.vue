@@ -402,6 +402,7 @@
                     <div v-if="currentRoute.kind === 'library-root' && !props.unifiedRoot" class="library-cover-overlay"></div>
                     <div v-if="currentRoute.kind === 'library-root' && !props.unifiedRoot" class="library-cover-title">{{ getListingHeading(item) }}</div>
                     <WatchedIndicator v-if="isDetailCandidate(item)" corner :watched="item.isPlayed === true" />
+                    <PosterRatingBadge :rating="item.rating" />
                     <div v-if="getListingOverlay(item)" class="listing-overlay-badge">{{ getListingOverlay(item) }}</div>
                   </div>
                   <h4 v-if="props.unifiedRoot">{{ getListingHeading(item) }}</h4>
@@ -499,6 +500,7 @@
                   />
                   <div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
                   <WatchedIndicator v-if="isDetailCandidate(item)" corner :watched="item.isPlayed === true" />
+                  <PosterRatingBadge :rating="item.rating" />
                     <div v-if="getListingOverlay(item)" class="listing-overlay-badge">{{ getListingOverlay(item) }}</div>
                 </div>
                 <template v-if="currentListingBrowseMode === 'grid'">
@@ -692,6 +694,7 @@
                           />
                           <div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
                           <div v-if="getListingOverlay(item)" class="person-poster-overlay">{{ getListingOverlay(item) }}</div>
+                          <PosterRatingBadge :rating="item.rating" />
                         </div>
                         <div class="person-rail-title">{{ item.title }}</div>
                         <div v-if="getListingSubtitle(item)" class="person-rail-subtitle">{{ getListingSubtitle(item) }}</div>
@@ -976,7 +979,8 @@
                             @load="handleCardImageLoad"
                             @error="handleCardImageError"
                           />
-                          <WatchedIndicator corner :watched="episode.isPlayed === true" /><div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
+                          <WatchedIndicator corner :watched="episode.isPlayed === true" /><div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder kind="resume" /></div>
+                          <PosterRatingBadge :rating="episode.rating" />
                           <button type="button" class="detail-episode-play-overlay" :aria-label="`播放 ${episode.title}`" @click.stop="playHomeMediaItem(episode)">
                             <Play :size="20" fill="currentColor" aria-hidden="true" />
                           </button>
@@ -1048,7 +1052,7 @@
                             @load="handleCardImageLoad"
                             @error="handleCardImageError"
                           />
-                          <div class="person-placeholder media-image-placeholder">{{ person.name.slice(0, 1) }}</div>
+                          <div class="person-placeholder media-image-placeholder"><UserRound class="person-placeholder-icon" aria-hidden="true" :stroke-width="1.5" /></div>
                         </div>
                         <div class="person-name">{{ person.name }}</div>
                         <div class="person-role">{{ person.role || '—' }}</div>
@@ -1079,6 +1083,7 @@
                           />
                           <div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
                           <WatchedIndicator v-if="isDetailCandidate(item)" corner :watched="item.isPlayed === true" /><div v-if="item.childCount" class="detail-recommendation-count">{{ item.childCount }}</div>
+                          <PosterRatingBadge :rating="item.rating" />
                         </div>
                         <div class="detail-recommendation-title">{{ item.title }}</div>
                       </button>
@@ -1376,10 +1381,11 @@ import type { PosterAction } from '../utils/mediaPosterMenu'
 import { openCustomSeries } from '../utils/customMediaSeries'
 import { detailResumeState } from '../utils/detailResume'
 import MediaEmptyFolder from '../components/MediaEmptyFolder.vue'
-import { Folder, Play } from 'lucide-vue-next'
+import { Folder, Play, UserRound } from 'lucide-vue-next'
 import { openMediaShare } from '../utils/mediaShare'
 import { openServerPersonalRating } from '../utils/mediaPersonalRating'
 import WatchedIndicator from '../components/WatchedIndicator.vue'
+import PosterRatingBadge from '../components/PosterRatingBadge.vue'
 import { compareMediaServerItems, type MediaServerBrowseSort, type MediaServerSortDirection } from '../utils/mediaServerBrowseSort'
 const props = defineProps<{ unifiedRoot?: boolean; rootSelection?: boolean; unifiedBrowse?: boolean; browseMode?: 'grid' | 'list'; serverSort?: MediaServerBrowseSort; serverSortDirection?: MediaServerSortDirection; serverSortSeed?: number }>()
 function sortListing<T extends MediaServerLibraryNode>(items: T[]): T[] {
@@ -3116,7 +3122,6 @@ const getListingSubtitle = (item: MediaServerLibraryNode) => {
 }
 
 const getListingOverlay = (item: MediaServerLibraryNode) => {
-  if (typeof item.rating === 'number') return `★ ${item.rating.toFixed(1)}`
   if (item.year) return `${item.year}`
   if (item.kind === 'series') return '剧集'
   if (item.kind === 'movie') return '电影'
@@ -5173,19 +5178,17 @@ onUnmounted(() => {
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.42), transparent 56%),
     linear-gradient(180deg, rgba(226, 232, 240, 0.92) 0%, rgba(203, 213, 225, 0.96) 100%);
-  color: transparent;
+  color: var(--color-text-3, #86909c);
   user-select: none;
 }
 
 .person-placeholder::before {
-  content: '';
-  width: clamp(40px, 40%, 58px);
-  height: clamp(40px, 40%, 58px);
-  border-radius: 16px;
-  background: center / contain no-repeat var(--app-icon-image);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.28);
-  filter: grayscale(1) brightness(0.72) contrast(0.92);
-  opacity: 0.88;
+  content: none;
+}
+
+.person-placeholder-icon {
+  width: 48%;
+  height: 48%;
 }
 
 .person-name {

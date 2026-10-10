@@ -42,6 +42,7 @@ export interface MediaLibraryItem {
 }
 
 export interface MediaCollectionMovie {
+  certification?: string
   id: string
   parentId: string
   folderId?: string
@@ -99,6 +100,7 @@ export interface MediaSeason {
 
 export interface MediaEpisode {
   id: number
+  rating?: number
   episodeNumber: number
   name: string
   overview?: string
@@ -144,6 +146,7 @@ export interface TvSeriesItemResponse extends ApiResponse<MediaLibraryTvSeriesIt
 
 // 电影数据结构
 export interface MovieItem {
+  certification?: string
   id: number
   imdb_id?: string
   backdrop_path?: string
@@ -176,6 +179,7 @@ export interface MediaLibraryTvSeriesItem {
 }
 
 export interface TvSeriesItem {
+  certification?: string
   id: number
   name: string
   original_name?: string

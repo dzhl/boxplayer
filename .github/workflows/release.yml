@@ -45,6 +45,14 @@ jobs:
             src/utils/__tests__/unifiedMediaScope.test.ts \
             src/utils/__tests__/unifiedMediaLibrary.test.ts \
             src/utils/__tests__/unifiedHomeManagement.test.ts \
+            src/utils/__tests__/certificationDisplay.test.ts \
+            src/utils/__tests__/libraryBrowseMode.test.ts \
+            src/utils/__tests__/listPosterCorner.test.ts \
+            src/utils/__tests__/localListInformation.test.ts \
+            src/utils/__tests__/tmdbCertification.test.ts \
+            src/utils/__tests__/tmdbTransientError.test.ts \
+            src/utils/__tests__/traktToolbarVisibility.test.ts \
+            src/utils/__tests__/unifiedListInformation.test.ts \
             src/utils/__tests__/mediaServerBrowseSort.test.ts \
             electron/main/core/__tests__/traktClient.test.ts \
             src/media-server/__tests__/favoriteCategories.test.ts \

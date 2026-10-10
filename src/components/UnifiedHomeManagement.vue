@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { Check, ChevronLeft, ChevronRight, GripHorizontal, Minus, Pencil, Plus, X } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { Check, ChevronLeft, ChevronRight, Menu, Minus, Pencil, Plus, X } from 'lucide-vue-next'
 import { t } from '../i18n'
 import { homeItemTitle, homeMenuTitle, mergeHomeOrder, moveHomeItem, visibleHomeItems, type HomeManagementGroup, type HomeManagementItem, type HomeManagementNode, type UnifiedHomeSettings } from '../utils/unifiedHomeManagement'
 
@@ -10,21 +10,80 @@ const draft = ref<UnifiedHomeSettings>({ order: mergeHomeOrder(props.settings.or
 const editing = ref(false)
 const path = ref<HomeManagementNode[]>([])
 const dragged = ref('')
-const dragTarget = ref('')
-function startDrag(event: DragEvent, id: string) {
+let dragCleanup: (() => void) | undefined
+function startDrag(event: PointerEvent, id: string) {
+  if (event.button !== 0 || dragCleanup) return
   const row = (event.currentTarget as HTMLElement).closest('.management-row') as HTMLElement | null
-  if (!row || !event.dataTransfer) return
-  dragged.value = id
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('text/plain', id)
+  const scroll = row?.closest('.management-scroll') as HTMLElement | null
+  if (!row || !scroll) return
+  event.preventDefault()
   const box = row.getBoundingClientRect()
-  event.dataTransfer.setDragImage(row, event.clientX - box.left, event.clientY - box.top)
+  const originalOrder = [...draft.value.order]
+  let pointerY = event.clientY
+  let ghost: HTMLElement | undefined
+  let frame = 0
+  // Vue moves keyed rows when reordering upwards. Capturing on the handle
+  // loses capture when that row is moved in the DOM, cancelling the drag.
+  // The scroll container stays mounted throughout the entire gesture.
+  scroll.setPointerCapture(event.pointerId)
+  const update = () => {
+    if (!ghost) return
+    ghost.style.top = `${pointerY - (event.clientY - box.top)}px`
+    const bounds = scroll.getBoundingClientRect()
+    if (pointerY < bounds.top + 36) scroll.scrollTop -= 10
+    else if (pointerY > bounds.bottom - 36) scroll.scrollTop += 10
+    const rows = Array.from(scroll.querySelectorAll<HTMLElement>('[data-sort-id]'))
+    const target = rows.reduce<HTMLElement | undefined>((nearest, candidate) => {
+      const rect = candidate.getBoundingClientRect()
+      const previous = nearest?.getBoundingClientRect()
+      return !previous || Math.abs(pointerY - rect.top - rect.height / 2) < Math.abs(pointerY - previous.top - previous.height / 2) ? candidate : nearest
+    }, undefined)
+    if (target?.dataset.sortId && target.dataset.sortId !== id) draft.value = moveHomeItem(draft.value, visible.value.map(item => item.id), id, target.dataset.sortId)
+    frame = requestAnimationFrame(update)
+  }
+  const pointerMove = (next: PointerEvent) => {
+    if (next.pointerId !== event.pointerId) return
+    pointerY = next.clientY
+    if (!ghost && Math.abs(pointerY - event.clientY) >= 4) {
+      ghost = row.cloneNode(true) as HTMLElement
+      ghost.removeAttribute('data-sort-id')
+      ghost.setAttribute('aria-hidden', 'true')
+      Object.assign(ghost.style, { position: 'fixed', left: `${box.left}px`, width: `${box.width}px`, height: `${box.height}px`, margin: '0', zIndex: '10000', pointerEvents: 'none', background: 'var(--color-bg-2, #181818)', color: 'var(--color-text-1)', boxShadow: '0 8px 28px #0008', opacity: '0.96' })
+      const label = ghost.querySelector('strong')
+      if (label) label.style.fontSize = '18px'
+      document.body.appendChild(ghost)
+      dragged.value = id
+      update()
+    }
+  }
+  const finish = (commit: boolean) => {
+    const changed = !!ghost
+    dragCleanup = undefined
+    cancelAnimationFrame(frame)
+    ghost?.remove()
+    window.removeEventListener('pointermove', pointerMove)
+    window.removeEventListener('pointerup', pointerUp)
+    window.removeEventListener('pointercancel', cancel)
+    window.removeEventListener('keydown', escape)
+    window.removeEventListener('blur', cancel)
+    scroll.removeEventListener('lostpointercapture', cancel)
+    if (scroll.hasPointerCapture(event.pointerId)) scroll.releasePointerCapture(event.pointerId)
+    dragged.value = ''
+    if (!commit) draft.value.order = originalOrder
+    else if (changed) emit('save', draft.value)
+  }
+  const pointerUp = (next: PointerEvent) => { if (next.pointerId === event.pointerId) finish(true) }
+  const cancel = () => finish(false)
+  const escape = (next: KeyboardEvent) => { if (next.key === 'Escape') { next.stopPropagation(); finish(false) } }
+  window.addEventListener('pointermove', pointerMove)
+  window.addEventListener('pointerup', pointerUp)
+  window.addEventListener('pointercancel', cancel)
+  window.addEventListener('keydown', escape)
+  window.addEventListener('blur', cancel)
+  scroll.addEventListener('lostpointercapture', cancel)
+  dragCleanup = cancel
 }
-function endDrag() { dragged.value = ''; dragTarget.value = '' }
-function dropRow(id: string) {
-  if (dragged.value && visible.value.some(item => item.id === dragged.value)) move(dragged.value, id)
-  endDrag()
-}
+onBeforeUnmount(() => dragCleanup?.())
 const renameTarget = ref<HomeManagementItem>()
 const renameText = ref('')
 const visible = computed(() => visibleHomeItems(props.items, draft.value))
@@ -64,7 +123,7 @@ watch(() => props.items, items => { draft.value.order = mergeHomeOrder(draft.val
 </script>
 
 <template>
-  <div class="home-management" data-testid="unified-home-management">
+  <div class="home-management" :class="{ 'sorting-view': !editing }" data-testid="unified-home-management">
     <header>
       <button class="circle" :aria-label="path.length ? t('unified.back') : t('common.close')" @click="path.length ? path.pop() : emit('close')"><ChevronLeft v-if="path.length" :size="20" /><X v-else :size="18" /></button>
       <h2>{{ editing ? currentTitle : t('nav.home') }}</h2>
@@ -73,8 +132,9 @@ watch(() => props.items, items => { draft.value.order = mergeHomeOrder(draft.val
     </header>
     <div class="management-scroll">
       <template v-if="!editing">
-        <div v-for="item in visible" :key="item.id" class="management-row" :class="{ 'is-dragging': dragged === item.id, 'drop-target': dragTarget === item.id && dragged !== item.id }" @dragover.prevent="dragged && (dragTarget = item.id)" @drop.prevent="dropRow(item.id)">
-          <strong>{{ homeMenuTitle(item, draft) }}</strong><button class="icon reorder-handle" draggable="true" :aria-label="t('unified.reorder', { name: title(item) })" @dragstart="startDrag($event, item.id)" @dragend="endDrag" @keydown.up.prevent="moveBy(item.id, -1)" @keydown.down.prevent="moveBy(item.id, 1)"><GripHorizontal :size="20" /></button>
+        <h3>{{ t('unified.displayItems') }}</h3>
+        <div v-for="item in visible" :key="item.id" class="management-row" :data-sort-id="item.id" :class="{ 'is-dragging': dragged === item.id }">
+          <strong>{{ homeMenuTitle(item, draft) }}</strong><button class="icon reorder-handle" :aria-label="t('unified.reorder', { name: title(item) })" @pointerdown.stop="startDrag($event, item.id)" @dragstart.prevent @keydown.up.prevent="moveBy(item.id, -1)" @keydown.down.prevent="moveBy(item.id, 1)"><Menu :size="22" :stroke-width="1.5" /></button>
         </div>
       </template>
       <template v-else>
@@ -99,12 +159,24 @@ watch(() => props.items, items => { draft.value.order = mergeHomeOrder(draft.val
 .management-scroll{width:100%;min-width:0;box-sizing:border-box;scrollbar-gutter:stable}
 .management-row{width:100%;box-sizing:border-box}
 .reorder-handle{cursor:grab}.reorder-handle:active{cursor:grabbing}.reorder-handle svg{pointer-events:none}
-.management-row.is-dragging{opacity:.45}
+.management-row.is-dragging{opacity:.2}
 .management-row.drop-target{background:var(--color-fill-2);outline:1px solid #ff8b25;outline-offset:-1px}
 .home-management{height:min(720px,80vh);display:flex;flex-direction:column;color:var(--color-text-1)}header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;gap:12px}h2{font-size:15px;margin:0;text-align:center;flex:1}button{font:inherit;color:inherit;cursor:pointer}.circle,.edit{border:1px solid var(--color-border-2);background:var(--color-fill-2);height:36px;display:grid;place-items:center;border-radius:50%;min-width:36px}.edit{border-radius:20px;padding:0 16px}.confirm{background:#ff8b25;color:white;border:0}.management-scroll{flex:1;overflow:auto;padding:8px 68px 20px}.management-row{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;margin:10px 0;background:var(--color-fill-3);border-radius:10px}.management-row strong,.node-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-weight:600;font-size:13px}.node-title,.icon{border:0;background:transparent;padding:4px}.icon{display:grid;place-items:center;color:var(--color-text-3)}.visibility{width:17px;height:17px;display:grid;place-items:center;border:0;border-radius:50%;background:#ff4848;color:white;padding:0;flex-shrink:0}.visibility.hidden{background:#30c653}h3{font-size:13px;color:var(--color-text-3);margin:18px 16px 6px}.reset{margin:0 68px 20px;border:0;background:var(--color-fill-3);border-radius:10px;padding:10px}button:focus-visible{outline:2px solid #ff8b25;outline-offset:3px}.management-row[draggable]{cursor:grab}@media(max-width:700px){.management-scroll{padding:8px 20px}.reset{margin:0 20px 20px}}
 .management-scroll{padding:8px 16px 20px}.management-row{min-height:44px;height:44px;margin:0;border-radius:0;background:transparent;border-bottom:1px solid var(--color-border-2);padding:0 8px}.management-row strong,.node-title{font-size:15px;font-weight:400}.icon{width:36px;height:44px;flex-shrink:0}.visibility{width:22px;height:22px;margin:0 6px}h3{margin:22px 8px 0;padding-bottom:8px;border-bottom:1px solid var(--color-border-2)}.confirm{background:var(--app-accent,#ff8b25)}.reset{margin:12px 16px 20px;border-radius:0;background:transparent;border-top:1px solid var(--color-border-2);border-bottom:1px solid var(--color-border-2);text-align:left}
+.sorting-view header{padding:18px 20px 24px;position:relative}
+.sorting-view header h2{font-size:20px;font-weight:600;position:absolute;left:50%;transform:translateX(-50%);pointer-events:none}
+.sorting-view .circle{width:48px;height:48px}.sorting-view .circle svg{width:26px;height:26px}
+.sorting-view .edit{height:48px;padding:0 22px;border-radius:28px;font-size:18px}
+.sorting-view .management-scroll{padding:0 20px 0}
+.sorting-view h3{margin:12px 0 0;padding:12px 0 10px;font-size:15px;font-weight:600}
+.sorting-view .management-row{height:52px;padding:0;user-select:none}
+.sorting-view .management-row strong{font-size:18px;font-weight:400}
+.sorting-view .reorder-handle{width:44px;height:52px;touch-action:none;user-select:none;-webkit-app-region:no-drag}
+.sorting-view .reset{flex-shrink:0;margin:28px 0 20px;padding:16px 20px;color:var(--app-accent,#ff8b25);font-size:16px}
 </style>
 <style>
 .unified-home-management-modal.arco-modal{width:660px!important;max-width:calc(100vw - 32px)!important}
 .unified-home-management-modal .arco-modal-body{width:100%;box-sizing:border-box}
+.unified-home-management-modal:has(.sorting-view){background:var(--color-bg-1)}
+body[arco-theme='dark'] .unified-home-management-modal:has(.sorting-view){background:#000}
 </style>

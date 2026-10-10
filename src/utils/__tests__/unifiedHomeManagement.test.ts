@@ -161,7 +161,49 @@ it('opens sorting first, then editing shows every server, including unavailable/
   app.component('a-input', { render: () => null })
   app.mount(root)
   expect(flatten(root).filter(item => item.props.class === 'management-row')).toHaveLength(2)
-  expect(flatten(root).filter(item => item.type === 'h3')).toHaveLength(0)
+  expect(flatten(root).filter(item => item.type === 'h3')).toHaveLength(1)
+  // Exercise the actual pointer handlers: move previews, release persists,
+  // cancellation restores the original order without saving.
+  const listeners = new Map<string, Function>()
+  const ghost = { style: {}, querySelector: () => null, removeAttribute: vi.fn(), setAttribute: vi.fn(), remove: vi.fn() }
+  const scroll = {
+    setPointerCapture: vi.fn(), hasPointerCapture: () => true, releasePointerCapture: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    scrollTop: 0,
+    getBoundingClientRect: () => ({ top: 0, bottom: 200 }),
+    querySelectorAll: () => ['sources', 'a:42'].map((id, index) => ({ dataset: { sortId: id }, getBoundingClientRect: () => ({ top: index * 52, height: 52 }) }))
+  }
+  const row = { closest: () => scroll, getBoundingClientRect: () => ({ top: 0, left: 0, width: 600, height: 52 }), cloneNode: () => ghost }
+  const handle = { closest: () => row, setPointerCapture: vi.fn(), hasPointerCapture: () => true, releasePointerCapture: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }
+  vi.stubGlobal('window', { addEventListener: (name: string, fn: Function) => listeners.set(name, fn), removeEventListener: (name: string) => listeners.delete(name) })
+  vi.stubGlobal('document', { body: { appendChild: vi.fn() } })
+  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  try {
+    const grip = flatten(root).find(item => String(item.props.class).includes('reorder-handle'))!
+    const down = () => grip.props.onPointerdown({ button: 0, pointerId: 1, clientY: 26, currentTarget: handle, preventDefault: vi.fn(), stopPropagation: vi.fn() })
+    down()
+    listeners.get('pointermove')!({ pointerId: 1, clientY: 80 })
+    expect(save).not.toHaveBeenCalled()
+    listeners.get('pointercancel')!()
+    expect(save).not.toHaveBeenCalled()
+    const secondGrip = flatten(root).filter(item => String(item.props.class).includes('reorder-handle'))[1]
+    secondGrip.props.onPointerdown({ button: 0, pointerId: 1, clientY: 78, currentTarget: handle, preventDefault: vi.fn(), stopPropagation: vi.fn() })
+    listeners.get('pointermove')!({ pointerId: 1, clientY: 26 })
+    await nextTick()
+    expect(flatten(root).filter(item => item.props['data-sort-id']).map(item => item.props['data-sort-id'])).toEqual(['a:42', 'sources'])
+    listeners.get('pointercancel')!()
+    expect(save).not.toHaveBeenCalled()
+    down()
+    listeners.get('pointermove')!({ pointerId: 1, clientY: 80 })
+    listeners.get('pointerup')!({ pointerId: 1 })
+    expect(save).toHaveBeenCalledOnce()
+    expect(save.mock.calls[0][0].order.slice(0, 2)).toEqual(['a:42', 'sources'])
+    expect(scroll.setPointerCapture).toHaveBeenCalledWith(1)
+    expect(handle.setPointerCapture).not.toHaveBeenCalled()
+    expect(ghost.remove).toHaveBeenCalledTimes(3)
+    expect(listeners.size).toBe(0)
+    save.mockClear()
+  } finally { vi.unstubAllGlobals() }
   flatten(root).find(item => item.type === 'button' && item.props.class === 'edit')!.props.onClick()
   await nextTick()
   expect(flatten(root).filter(item => item.type === 'h3').map(text)).toContain('Emby A')

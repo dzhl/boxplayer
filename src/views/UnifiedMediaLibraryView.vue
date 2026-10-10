@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { mediaWatchProgressPercent } from '../utils/mediaWatchProgress'
+import { useLibraryBrowseMode } from '../store/libraryBrowseMode'
 import MediaShareModal from '../components/MediaShareModal.vue'
 import UnifiedLibraryBrowser from '../components/UnifiedLibraryBrowser.vue'
 import useLibraryBookmarks from '../store/unifiedLibraryBookmarks'
@@ -113,7 +114,6 @@ function showCatalog(route = 'library', pushHistory = true) {
   }
   if (route.startsWith('source:')) { sourceCards.value.find(card => card.key === route)?.action(); return }
   if (route === 'music' || route === 'books') { app.mediaLibrarySection = route === 'books' ? 'book' : 'music'; return }
-  collectionMode.value = 'grid'
   catalogTitle.value = t('media.library')
   showHomeRow('catalog:' + route)
 }
@@ -148,7 +148,6 @@ let searchGeneration = 0
 const isSearchPage = computed(() => section.value === 'collection' && selectedHomeRowKey.value === 'search-results')
 const searchScopes = computed(() => [...registry.servers.map(server => ({ id: server.id, title: server.name })), { id: 'library', title: t('media.library') }, { id: 'local', title: t('unified.localFiles') }])
 function openSidebarSearch() {
-  if (!isSearchPage.value) collectionMode.value = 'grid'
   if (!searchScope.value) searchScope.value = registry.currentServer?.id || registry.servers[0]?.id || 'library'
   selectedHomeRowKey.value = 'search-results'
   app.mediaLibrarySection = 'collection'
@@ -241,7 +240,7 @@ function syncCustomSeries() {
  }
 }
 
-const collectionMode = ref<'grid' | 'list'>('grid')
+const collectionMode = useLibraryBrowseMode()
 const localOnly = ref(false)
 const browseSort = ref<MediaBrowseSort>('fileName')
 const serverSort = ref<MediaServerBrowseSort>('sortName')
@@ -447,8 +446,6 @@ const categories = computed(() => [
   { key: 'movies', title: t('media.movie'), icon: Film },
   { key: 'tv', title: t('media.tv'), icon: Tv },
   { key: 'genres', title: t('unified.movieGenres'), icon: Library },
-  { key: 'animation', title: t('media.animation'), icon: Tv },
-  { key: 'documentary', title: t('media.documentary'), icon: Film },
   { key: 'unmatched', title: t('unified.other'), icon: Folder },
   { key: 'favorites', title: t('pan.favorite'), icon: Star },
   { key: 'playlist', title: t('media.playlist'), icon: List }
@@ -487,7 +484,7 @@ async function selectBookTab(tab: BookManagerView) {
   await bookView.value?.selectView(tab)
 }
 function showHome() { app.mediaLibrarySection = 'home'; selectedCategory.value = 'home'; selectedFolder.value = '' }
-function showHomeRow(key: string) { if (key === 'library-index' || key === 'library-shortcuts') collectionMode.value = 'grid'; selectedHomeRowKey.value = key; app.mediaLibrarySection = 'collection' }
+function showHomeRow(key: string) { selectedHomeRowKey.value = key; app.mediaLibrarySection = 'collection' }
 async function showCategory(category: string) {
   if (category === 'home') { showHome(); return }
   app.mediaLibrarySection = 'video'
@@ -554,8 +551,8 @@ async function serverPosterAction(item: MediaServerCardItem, action: PosterActio
   return
  }
  await nextTick(); await serverWorkspace.value?.posterAction(item, action) }
-const localCard = (item: MediaLibraryItem, landscape = false): Card => ({ posterMenu: { server: false, tv: item.type === 'tv', continuing: media.continueWatching.some(entry => isContinueWatchingMember(entry, item)), watched: isMediaWatched(item, media.watchedItems), disabled: (item.type === 'tv' ? item.seasons?.flatMap(season => season.episodes || []).flatMap(episode => episode.driveFiles || []) || [] : item.driveFiles).some(file => file.driveId !== 'local' && file.userId && file.userId !== 'local') ? [] : ['download'], action: action => { void localPosterAction(item, action) } }, key: `local:${item.id}`, title: item.name, sortValues: { title: item.name, fileName: item.driveFiles[0]?.name, addedAt: item.addedAt, premiereDate: item.releaseDate }, image: landscape ? item.backdropUrl || item.posterUrl : item.posterUrl || item.backdropUrl, subtitle: item.year, progress: mediaWatchProgressPercent(item), action: () => { void openVideo(item) } })
-const serverCard = (item: MediaServerCardItem, landscape = false): Card => ({ posterMenu: { server: true, tv: item.kind === 'series' || item.kind === 'season', watched: item.isPlayed === true, favorite: item.isFavorite, disabled: item.kind === 'season' ? ['rating', 'playlist'] : ['playlist'], action: action => { void serverPosterAction(item, action) } }, key: `${item.serverId}:${item.id}`, title: item.title, sortValues: item, image: toMsCacheUrl(item.serverId, resolveMediaServerImage(item, landscape ? 'landscape' : 'portrait')), subtitle: item.parentTitle || String(item.year || ''), progress: item.progress, action: () => showServer(item.serverId, { kind: 'item-detail', itemId: item.id, title: item.title }) })
+const localCard = (item: MediaLibraryItem, landscape = false): Card => ({ overview: item.overview, certification: item.certification, rating: item.rating, posterMenu: { server: false, tv: item.type === 'tv', continuing: media.continueWatching.some(entry => isContinueWatchingMember(entry, item)), watched: isMediaWatched(item, media.watchedItems), disabled: (item.type === 'tv' ? item.seasons?.flatMap(season => season.episodes || []).flatMap(episode => episode.driveFiles || []) || [] : item.driveFiles).some(file => file.driveId !== 'local' && file.userId && file.userId !== 'local') ? [] : ['download'], action: action => { void localPosterAction(item, action) } }, key: `local:${item.id}`, title: item.name, sortValues: { title: item.name, fileName: item.driveFiles[0]?.name, addedAt: item.addedAt, premiereDate: item.releaseDate }, image: landscape ? item.backdropUrl || item.posterUrl : item.posterUrl || item.backdropUrl, subtitle: item.year, progress: mediaWatchProgressPercent(item), action: () => { void openVideo(item) } })
+const serverCard = (item: MediaServerCardItem, landscape = false): Card => ({ overview: item.overview, certification: item.officialRating, rating: item.rating, posterMenu: { server: true, tv: item.kind === 'series' || item.kind === 'season', watched: item.isPlayed === true, favorite: item.isFavorite, disabled: item.kind === 'season' ? ['rating', 'playlist'] : ['playlist'], action: action => { void serverPosterAction(item, action) } }, key: `${item.serverId}:${item.id}`, title: item.title, sortValues: item, image: toMsCacheUrl(item.serverId, resolveMediaServerImage(item, landscape ? 'landscape' : 'portrait')), subtitle: item.parentTitle || String(item.year || ''), progress: item.progress, action: () => showServer(item.serverId, { kind: 'item-detail', itemId: item.id, title: item.title }) })
 const searchRows = computed<Row[]>(() => {
   const keyword = query.value.trim().toLocaleLowerCase()
   if (!keyword) return []
@@ -908,14 +905,9 @@ watch(() => visibleHomeMenu.value.filter(item => item.id.includes(':server-favor
       <div v-show="expanded.home" class="nav-children">
         <button v-for="item in visibleHomeMenu" :key="item.id" :class="{ selected: isHomeMenuSelected(item.id) }" @click="openHomeMenu(item.id)"><component :is="homeNavigationIcon(item.id)" :size="18" /><span :title="item.title">{{ item.title }}</span></button>
       </div>
-      <div class="group-header"><button class="group-heading" :class="{ selected: section === 'collection' && selectedHomeRowKey === 'library-index' }" @click="showHomeRow('library-index')"><Library :size="20" /><span>{{ t('media.library') }}</span></button><button class="group-toggle" :aria-expanded="expanded.library" :aria-label="t('unified.expandGroup', { name: t('media.library') })" @click="expanded.library = !expanded.library"><ChevronDown :size="14" /></button></div>
+      <div class="group-header"><button class="group-heading" :class="{ selected: isCatalogPage && selectedHomeRowKey === 'catalog:library' }" @click="showCatalog('library')"><Library :size="20" /><span>{{ t('media.library') }}</span></button><button class="group-toggle" :aria-expanded="expanded.library" :aria-label="t('unified.expandGroup', { name: t('media.library') })" @click="expanded.library = !expanded.library"><ChevronDown :size="14" /></button></div>
       <div v-show="expanded.library && !homePreferences.hidden.includes('library')" class="nav-children">
-        <button :class="{ selected: section === 'collection' && selectedHomeRowKey === 'local:daily' }" @click="showHomeRow('local:daily')"><CalendarDays :size="18" /><span>{{ t('unified.dailyPicks') }}</span></button>
-        <button :class="{ selected: section === 'collection' && selectedHomeRowKey === 'local:top-rated' }" @click="showHomeRow('local:top-rated')"><Star :size="18" /><span>{{ t('unified.topMovies') }}</span></button>
-        <button v-for="item in categories" :key="item.key" :class="{ selected: section === 'video' && !selectedFolder && selectedCategory === item.key }" @click="showCategory(item.key)"><component :is="item.icon" :size="18" /><span>{{ item.title }}</span></button>
-        <button :class="{ selected: section === 'collection' && selectedHomeRowKey.startsWith('custom-series') }" @click="showCustomSeries()"><GalleryVerticalEnd :size="18" /><span>{{ t('unified.series') }}</span></button>
-        <button data-testid="unified-nav-music" :class="{ selected: section === 'music' }" @click="app.mediaLibrarySection = 'music'"><Music :size="18" /><span>{{ t('nav.music') }}</span></button>
-        <button data-testid="unified-nav-book" :class="{ selected: section === 'book' }" @click="app.mediaLibrarySection = 'book'"><BookOpen :size="18" /><span>{{ t('nav.books') }}</span></button>
+        <button v-for="item in libraryShortcutCards" :key="item.key" :class="{ selected: selectedHomeRowKey === 'catalog:' + item.key && isCatalogPage || item.key === 'music' && section === 'music' || item.key === 'books' && section === 'book' }" @click="item.action()"><Folder :size="18" /><span>{{ item.title }}</span></button>
 
       </div>
       <div class="group-header"><button class="group-heading" :class="{ selected: section === 'files' }" @click="app.mediaLibrarySection = 'files'"><Folder :size="20" /><span>{{ t('unified.files') }}</span></button><button class="group-toggle" :aria-expanded="expanded.files" :aria-label="t('unified.expandGroup', { name: t('unified.files') })" @click="expanded.files = !expanded.files"><ChevronDown :size="14" /></button></div>
@@ -941,7 +933,7 @@ watch(() => visibleHomeMenu.value.filter(item => item.id.includes(':server-favor
         </div>
         <button v-if="section === 'home'" class="round-button" :disabled="refreshing" :aria-label="t('common.refresh')" @click="refresh()"><MediaLoadingIndicator v-if="refreshing" :size="18" /><RefreshCw v-else :size="18" /></button>
         <button v-if="section === 'home'" class="round-button" data-testid="unified-manage-home" :aria-label="t('media.manager')" @click="showHomeManagement = true"><List :size="18" /></button>
-        <button v-if="section === 'home' || traktStatus.connected" class="round-button" aria-label="Trakt" title="Trakt" @click="showTraktAccount = true"><TraktAvatar v-if="traktStatus.connected" :src="traktAccount?.avatar" :size="32" /><img v-else :src="traktLogo" alt="Trakt" width="26" height="26" /></button>
+        <button v-if="section === 'home'" class="round-button" aria-label="Trakt" title="Trakt" @click="showTraktAccount = true"><TraktAvatar v-if="traktStatus.connected" :src="traktAccount?.avatar" :size="32" /><img v-else :src="traktLogo" alt="Trakt" width="26" height="26" /></button>
         <button v-if="(isCategoryPage || isServerRootPage || isFolderPage || section === 'files') && !isGenreIndexPage && !isLibrarySettingsPage && !isSearchPage" class="round-button" :aria-label="collectionMode === 'grid' ? t('mediaServer.listView') : t('mediaServer.gridView')" @click="collectionMode = collectionMode === 'grid' ? 'list' : 'grid'"><Grid2X2 v-if="collectionMode === 'grid'" :size="18" /><List v-else :size="18" /></button>
         <a-dropdown v-if="isServerCategoryPage" v-model:popup-visible="serverSortMenuVisible" trigger="click" position="br">
           <button class="round-button more-button server-sort-button" :aria-label="t('unified.sortLabel')" data-testid="server-category-sort"><ArrowUpDown :size="20" /><ChevronDown :size="10" /></button>

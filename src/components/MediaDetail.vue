@@ -3,6 +3,7 @@ import MediaPosterPlaceholder from './MediaPosterPlaceholder.vue'
 import { detailBackdropUrl } from '../utils/mediaArtwork'
 import MediaCollectionPicker from './MediaCollectionPicker.vue'
 import WatchedIndicator from './WatchedIndicator.vue'
+import PosterRatingBadge from './PosterRatingBadge.vue'
 import { isMediaWatched, setMediaWatched } from '../utils/localWatchedState'
 import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useSettingStore, useUserStore } from '../store'
@@ -818,6 +819,7 @@ const getCastInitial = (name?: string): string => {
         <div class="hero-content">
           <div class="hero-poster">
             <WatchedIndicator corner :watched="isWatched" />
+            <PosterRatingBadge :rating="activeMediaItem.rating" />
             <img v-if="activeMediaItem.posterUrl" :src="activeMediaItem.posterUrl" :alt="activeMediaItem.name" />
             <div v-else class="poster-placeholder">
               <MediaPosterPlaceholder />
@@ -843,6 +845,7 @@ const getCastInitial = (name?: string): string => {
 
             <div class="hero-meta-secondary">
               <span v-if="activeMediaItem.year">{{ activeMediaItem.year }}</span>
+              <span v-if="activeMediaItem.certification?.trim()" class="content-certification">{{ activeMediaItem.certification }}</span>
               <span>24分钟</span>
               <span>1080P</span>
               <span>SDR</span>
@@ -980,6 +983,7 @@ const getCastInitial = (name?: string): string => {
           >
             <div class="episode-thumbnail">
               <WatchedIndicator corner :watched="isMediaWatched(movie, mediaStore.watchedItems)" />
+              <PosterRatingBadge :rating="movie.rating" />
               <img v-if="movie.posterUrl" :src="movie.posterUrl" :alt="movie.name" class="episode-image" @error="handleImageError" />
               <div v-else class="thumbnail-placeholder"><MediaPosterPlaceholder /></div>
             </div>
@@ -1021,6 +1025,7 @@ const getCastInitial = (name?: string): string => {
           >
             <div class="episode-thumbnail">
               <WatchedIndicator corner :watched="mediaStore.isWatched(`${String(activeMediaItem.id).split('_').slice(0, -2).join('_') || activeMediaItem.id}_${episode.seasonNumber}_${episode.episodeNumber}`)" />
+              <PosterRatingBadge :rating="episode.rating" />
               <img
                 v-if="episode.stillPath || activeMediaItem.posterUrl"
                 :src="episode.stillPath || activeMediaItem.posterUrl"
@@ -1030,10 +1035,10 @@ const getCastInitial = (name?: string): string => {
                 @click="handleEpisodePlay(episode)"
               />
               <div v-else class="thumbnail-placeholder">
-                <span class="episode-number">{{ episode.episodeNumber }}</span>
+                <MediaPosterPlaceholder kind="resume" />
               </div>
               <div v-if="episode.stillPath || activeMediaItem.posterUrl" class="thumbnail-placeholder" style="display: none;">
-                <span class="episode-number">{{ episode.episodeNumber }}</span>
+                <MediaPosterPlaceholder kind="resume" />
               </div>
               <button type="button" class="episode-play-overlay" :aria-label="`播放第 ${episode.episodeNumber} 集`" @click.stop="handleEpisodePlay(episode)">
                 <Play :size="20" fill="currentColor" aria-hidden="true" />
@@ -1212,6 +1217,15 @@ const getCastInitial = (name?: string): string => {
 </template>
 
 <style scoped lang="less">
+.content-certification {
+  display: inline-block;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1.2;
+}
 .media-detail {
   height: 100%;
   display: flex;
