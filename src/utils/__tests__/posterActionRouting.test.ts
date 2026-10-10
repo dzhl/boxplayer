@@ -8,7 +8,7 @@ describe('poster action routing regressions', () => {
     const server = home.slice(home.indexOf('async function serverPosterAction'), home.indexOf('const localCard'))
     expect(local).not.toContain('showCategory(')
     expect(server).not.toContain('showServer(')
-    expect(home).toContain("void showCustomSeries()")
+    expect(home).toContain('@custom-series="showCustomSeries"')
   })
   it.each(['src/components/MediaPersonalRatingModal.vue', 'src/components/media-server/home/MediaServerPosterRow.vue'])('compiles updated menu surfaces: %s', file => {
     const { descriptor, errors } = parse(readFileSync(file, 'utf8'))

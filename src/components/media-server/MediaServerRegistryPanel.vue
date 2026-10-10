@@ -164,6 +164,7 @@
       </div>
     </div>
 
+    </template>
     <a-modal
       v-model:visible="renameModalVisible"
       :title="t('mediaServer.renameServer')"
@@ -304,7 +305,6 @@
         </div>
       </div>
     </a-modal>
-    </template>
   </div>
 </template>
 
@@ -863,7 +863,7 @@ const handleSubmitServer = async (payload: {
     submitting.value = false
   }
 }
-defineExpose({ openAddServer: handleAddServer, openProvider: handleQuickAdd, editServer: handleEditServer, deleteServer: handleDeleteServer })
+defineExpose({ openAddServer: handleAddServer, openProvider: handleQuickAdd, editServer: handleEditServer, deleteServer: handleDeleteServer, openIconManager })
 </script>
 
 <style scoped>

@@ -43,6 +43,8 @@ export interface MediaServerCardItem {
   premiereDate?: string
   year?: number
   rating?: number
+  tmdbId?: number
+  imdbId?: string
   runtimeMinutes?: number
   progress?: number
   parentTitle?: string
@@ -50,6 +52,7 @@ export interface MediaServerCardItem {
   episodeNumber?: number
   isPlayed?: boolean
   isFavorite?: boolean
+  isContinuing?: boolean
   coverageBadge?: string
 }
 

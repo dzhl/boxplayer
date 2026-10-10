@@ -1,7 +1,7 @@
 <template>
   <div class="media-library" :class="{ 'unified-category': props.unifiedBrowse, 'unified-folder': props.unifiedFiles }">
     <!-- 顶部导航 - 详情页面时隐藏 -->
-    <div v-if="!props.unifiedBrowse && !showingDetail && !isHomeView && !props.selectedFolder" class="library-header">
+    <div v-if="!props.unifiedBrowse && !showingDetail && !props.selectedFolder" class="library-header">
       <div class="library-tabs">
         <a-tabs v-model:activeKey="activeTab" type="text" class="hidetabs">
           <a-tab-pane key="continue" :tab="t('mediaLibrary.continue')" />
@@ -90,7 +90,7 @@
     <!-- 内容区域 -->
     <div class="library-content">
       <div v-if="mediaStore.isScanning && !showingDetail" class="library-scan-status">
-        <a-spin :size="16" />
+        <MediaLoadingIndicator :size="16" />
         <span>{{ t('mediaLibrary.scanningFiles', { progress: mediaStore.scanProgress, total: mediaStore.scanTotal }) }}</span>
       </div>
 
@@ -109,7 +109,8 @@
 
       <!-- 显示媒体详情 -->
       <MediaDetail
-        v-if="showingDetail && currentMediaItem"
+        v-if="currentMediaItem"
+        v-show="showingDetail"
         :media-item="currentMediaItem"
         :active-playlist-name="selectedPlaylist"
         :playlist-items="selectedPlaylist ? pagedItems : []"
@@ -120,175 +121,9 @@
       />
 
       <!-- 显示媒体库内容 -->
-      <template v-else-if="showSearchResults">
+      <template v-if="!showingDetail && showSearchResults">
       <div
-        v-if="isHomeView"
-        class="library-home-page"
-      >
-        <div class="library-home-toolbar">
-          <div class="library-home-toolbar-spacer" />
-          <div class="library-home-toolbar-right">
-            <a-input
-              v-model="homeSearchQuery"
-              allow-clear
-              class="library-home-search"
-              :placeholder="t('mediaLibrary.filterPlaceholder')"
-            >
-              <template #prefix><IconFont name="iconsearch" /></template>
-            </a-input>
-            <button type="button" class="toolbar-btn" @click="openLocalHomeManager">
-              <IconFont name="iconlist" />
-              <span>{{ t('mediaServer.mediaManagement') }}</span>
-            </button>
-            <div class="view-toggle-pill">
-              <button
-                class="view-toggle-seg"
-                :class="{ active: localHomePosterMode === 'landscape' }"
-                :title="t('mediaServer.landscapePoster')"
-                @click="setLocalHomePosterMode('landscape')"
-              >
-                <IconFont name="iconfangkuang" />
-              </button>
-              <span class="view-toggle-divider" />
-              <button
-                class="view-toggle-seg"
-                :class="{ active: localHomePosterMode === 'portrait' }"
-                :title="t('mediaServer.portraitPoster')"
-                @click="setLocalHomePosterMode('portrait')"
-              >
-                <IconFont name="iconxiaotumoshi" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="homeSearchQuery.trim() && visibleLocalHomeSections.length === 0" class="library-home-search-empty">
-          <IconFont name="iconsearch" />
-          <span>{{ t('mediaLibrary.noCloudMatches') }}</span>
-        </div>
-
-        <template v-for="section in visibleLocalHomeSections" :key="section.key">
-          <MediaServerResumeRow
-            v-if="section.kind === 'continue' && (filteredLocalContinueCards.length > 0)"
-            :items="filteredLocalContinueCards"
-            @play="handleLocalHomeResumePlay"
-            @action="handleLocalHomeCardAction"
-          />
-
-          <MediaServerPosterRow
-            v-else-if="section.kind === 'media' && (section.items?.length || 0) > 0"
-            :title="section.title"
-            :items="section.items || []"
-            :poster-type="section.posterType"
-            :show-poster-labels="localHomePreferences.showPosterLabels"
-            :enable-context-menu="true"
-            :show-edit-metadata="true"
-            :show-top-overlay="true"
-            :see-all-label="t('mediaServer.seeAll', { count: getLocalHomeSectionTotalCount(section) })"
-            subtitle-mode="year-only"
-            @select="handleLocalHomeNodeSelect"
-            @play="handleLocalHomeNodePlay"
-            @action="handleLocalHomeCardAction"
-            @metadata="openLocalHomeMetadataEditor"
-            @see-all="handleLocalHomeSeeAll(section)"
-          />
-
-          <section
-            v-else-if="section.kind === 'shortcut' && (section.entries?.length || 0) > 0"
-            class="library-home-section"
-          >
-            <div class="home-section-header">
-              <h4>{{ section.title }}</h4>
-              <button
-                v-if="section.key === 'genres' || section.key === 'ratings' || section.key === 'years' || section.key === 'playlists'"
-                type="button"
-                class="toolbar-btn"
-                @click="handleLocalShortcutSeeAll(section.key)"
-              >
-                {{ t('mediaServer.seeAll', { count: getLocalHomeSectionTotalCount(section) }) }}
-              </button>
-              <span v-else>{{ t('mediaServer.itemsCount', { count: (section.entries || []).length }) }}</span>
-            </div>
-            <div
-              class="library-home-row"
-              :class="section.variant === 'banner' ? 'library-home-row-banner' : 'library-home-row-category'"
-            >
-              <CategoryCard
-                v-for="entry in (section.entries || [])"
-                v-show="section.variant === 'banner'"
-                :key="entry.key"
-                :name="entry.title"
-                :count="entry.count ?? 0"
-                :type="entry.cardType ?? 'genre'"
-                :cover-images="entry.coverImages ?? []"
-                class="library-home-category-card"
-                @click="handleLocalShortcutSelect(entry)"
-              />
-              <button
-                v-for="entry in (section.entries || [])"
-                v-show="section.variant === 'mini'"
-                :key="entry.key"
-                type="button"
-                class="library-home-shortcut-card library-home-mini-card"
-                @click="handleLocalShortcutSelect(entry)"
-              >
-                  <div class="library-home-mini-icon">
-                    <i class="iconfont" :class="entry.icon" />
-                  </div>
-                  <div class="library-home-mini-main">
-                    <h5>{{ entry.title }}</h5>
-                    <p>{{ entry.description }}</p>
-                  </div>
-                  <div v-if="entry.count !== undefined" class="library-home-mini-count">{{ entry.count }}</div>
-              </button>
-            </div>
-          </section>
-        </template>
-
-        <a-modal
-          v-model:visible="localHomeManagerVisible"
-          :title="t('mediaServer.mediaManagement')"
-          :footer="false"
-          width="560px"
-          class="detail-media-modal"
-        >
-          <div class="home-library-manager-panel">
-            <p class="home-library-manager-hint">{{ t('mediaLibrary.homeManagerHint') }}</p>
-            <div v-if="localHomeManagerDraft.length > 0" class="home-library-manager-list">
-              <div
-                v-for="item in localHomeManagerDraft"
-                :key="item.key"
-                class="home-library-manager-item"
-                :class="{ dragging: draggingLocalHomeSectionId === item.key }"
-                :data-section-key="item.key"
-                draggable="true"
-                @dragstart="handleLocalHomeDragStart($event, item.key)"
-                @dragover.prevent
-                @drop.prevent="handleLocalHomeDrop(item.key)"
-                @dragend="handleLocalHomeDragEnd"
-              >
-                <div
-                  class="home-library-manager-drag-icon"
-                  @mousedown.prevent="handleLocalHomePointerDragStart(item.key)"
-                >
-                  <IconFont name="iconmenu-unfold" />
-                </div>
-                <a-checkbox :model-value="item.visible" @change="toggleLocalHomeDraftVisible(item.key, $event)">
-                  {{ item.title }}
-                </a-checkbox>
-              </div>
-            </div>
-            <div v-else class="home-library-manager-empty">{{ t('mediaLibrary.noHomeSections') }}</div>
-            <div class="home-library-manager-footer">
-              <a-button type="outline" @click="cancelLocalHomeManager">{{ t('common.cancel') }}</a-button>
-              <a-button type="primary" @click="saveLocalHomeManager">{{ t('common.save') }}</a-button>
-            </div>
-          </div>
-        </a-modal>
-      </div>
-
-      <div
-        v-else-if="isSearchView"
+        v-if="isSearchView"
         class="search-results-hub"
       >
         <div class="search-media-server-panel integrated">
@@ -447,6 +282,7 @@
             </button>
             <div id="media-server-search-section" v-show="!isMediaServerSectionCollapsed">
               <div v-if="mediaServerSearchLoading" class="search-media-server-state">
+                <MediaLoadingIndicator />
                 {{ localSearchQuery.trim() ? t('mediaLibrary.searchingServers') : t('mediaLibrary.loadingServerRecommendations') }}
               </div>
               <div v-else-if="mediaServerSearchError" class="search-media-server-state error">{{ mediaServerSearchError }}</div>
@@ -847,10 +683,28 @@
     >
       <div :style="contextMenuStyle" style="width: 1px; height: 1px; visibility: hidden;" />
       <template #content>
-        <MediaPosterMenu :tv="contextMenuItem?.type === 'tv'" :watched="contextMenuIsWatched" :disabled="contextMenuItem && downloadableMediaFiles(contextMenuItem).length ? [] : ['download']" @action="handlePosterAction" />
+        <MediaPosterMenu :tv="contextMenuItem?.type === 'tv'" :continuing="contextMenuInContinueWatching" :watched="contextMenuIsWatched" :disabled="contextMenuItem && downloadableMediaFiles(contextMenuItem).length ? [] : ['download']" @action="handlePosterAction" />
       </template>
     </a-trigger>
-    <a-modal v-model:visible="playlistVisible" :title="t('media.playlist')" :footer="false" :width="440"><div class="poster-playlist-picker"><label v-for="name in Object.keys(mediaStore.playlists)" :key="name"><input type="checkbox" :checked="mediaStore.isInPlaylist(name, playlistTargetId)" @change="mediaStore.togglePlaylistItem(name, playlistTargetId)" />{{ name }}</label><form @submit.prevent="createPlaylistForTarget"><a-input v-model="playlistTitle" :aria-label="t('posterMenu.playlistName')" :placeholder="t('posterMenu.playlistName')" :max-length="120" /><a-button html-type="submit" :disabled="!playlistTitle.trim()">{{ t('posterMenu.createPlaylist') }}</a-button></form><p v-if="playlistError" role="alert">{{ playlistError }}</p></div></a-modal>
+    <MediaCollectionPicker
+      :visible="playlistVisible"
+      heading="播放列表"
+      :item-title="playlistTargetTitle"
+      :rows="playlistRows"
+      :editing="playlistEditing"
+      v-model:name="playlistTitle"
+      :error="playlistError"
+      removable
+      hint="选择播放列表，点击完成保存；取消不会修改当前条目的归属。"
+      @close="playlistVisible = false"
+      @done="savePlaylistSelection"
+      @create="startPlaylistName()"
+      @rename="startPlaylistName"
+      @toggle="togglePlaylistSelection"
+      @remove="removePlaylist"
+      @cancel-name="playlistEditing = null; playlistError = ''"
+      @confirm-name="confirmPlaylistName"
+    />
     <MediaMetadataEditorModal
       v-if="manualMetadataTarget"
       :defaults-to-whole-tv-series="manualMetadataDefaultsToWholeTvSeries"
@@ -867,6 +721,7 @@ import { openMediaShare } from '../utils/mediaShare'
 import { openPersonalRating } from '../utils/mediaPersonalRating'
 import { Modal } from '@arco-design/web-vue'
 import MediaPosterPlaceholder from './MediaPosterPlaceholder.vue'
+import MediaLoadingIndicator from './MediaLoadingIndicator.vue'
 import MediaEmptyFolder from './MediaEmptyFolder.vue'
 import { compareMediaBrowseValues, nextMediaBrowseSort, type MediaBrowseSort } from '../utils/mediaBrowseSort'
 import { ref, computed, onMounted, watch } from 'vue'
@@ -886,13 +741,14 @@ import MediaPanRight from './MediaPanRight.vue'
 import { useMediaPanFileStore, useMediaPanTreeStore } from './stores'
 import CategoryCard from './CategoryCard.vue'
 import MediaDetail from './MediaDetail.vue'
+import MediaCollectionPicker from './MediaCollectionPicker.vue'
+import { isContinueWatchingMember, toggleContinueWatching } from '../utils/continueWatchingAction'
+import { playlistSelection, applyPlaylistSelection } from '../utils/detailCollections'
+import { matchesMediaPerson } from '../utils/mediaPersonFilter'
 import MediaMetadataEditorModal from './MediaMetadataEditorModal.vue'
-import MediaServerPosterRow from './media-server/home/MediaServerPosterRow.vue'
-import MediaServerResumeRow from './media-server/home/MediaServerResumeRow.vue'
 import type { MediaLibraryItem } from '../types/media'
 import type { DriveFileItem } from '../types/media'
 import type { MediaServerLibraryNode } from '../types/mediaServerContent'
-import type { MediaServerCardItem } from '../types/mediaServerContent'
 import type { IAliGetFileModel } from '../aliapi/alimodels'
 import type { IPageVideoPlaylistEntry } from '../store/appstore'
 import { getMediaServerSearch, getMediaServerSuggestions } from '../media-server/contentGateway'
@@ -907,37 +763,13 @@ import message from '../utils/message'
 import DownDAL from '../down/DownDAL'
 import useSettingStore from '../setting/settingstore'
 import { manualAIScrapeItems } from '../utils/mediaAIScrape'
-import useLocalMediaHomePreferencesStore from '../store/localMediaHomePreferences'
 import { getMediaCoverage } from '../utils/mediaCoverage'
-import type { LocalMediaHomePosterType, LocalMediaHomeSectionKey } from '../store/localMediaHomePreferences'
 import { t } from '../i18n'
 import { appIconUrl } from '../utils/appAssets'
 import { hasLocalMedia } from '../utils/unifiedMediaScope'
 
 type MediaListItem = MediaLibraryItem & {
   continueEpisodeLabel?: string
-}
-
-type LocalHomeMediaSection = {
-  key: LocalMediaHomeSectionKey
-  kind: 'continue' | 'media' | 'shortcut'
-  title: string
-  category?: string
-  posterType?: 'portrait' | 'landscape'
-  items?: MediaServerLibraryNode[]
-  variant?: 'banner' | 'mini'
-  entries?: Array<{
-    key: string
-    title: string
-    description: string
-    icon: string
-    count?: number
-    coverImages?: string[]
-    cardType?: 'genre' | 'rating' | 'year' | 'playlist'
-    style?: CSSProperties
-    overlayStyle?: CSSProperties
-    action: () => void
-  }>
 }
 
 const props = defineProps<{
@@ -960,10 +792,52 @@ const localSelection = ref(false)
 const effectiveBrowseSelection = computed(() => props.browseSelection || localSelection.value)
 const playlistVisible = ref(false)
 const playlistTargetId = ref('')
+const playlistTargetTitle = ref('')
 const playlistTitle = ref('')
 const playlistError = ref('')
-function showPlaylistPicker() { if (!contextMenuItem.value) return; playlistTargetId.value = contextMenuItem.value.id; playlistTitle.value = ''; playlistError.value = ''; playlistVisible.value = true; handleContextMenuClose() }
-function createPlaylistForTarget() { const name = playlistTitle.value.trim(); if (!name) return; if (Object.hasOwn(mediaStore.playlists, name)) { playlistError.value = t('posterMenu.duplicatePlaylist'); return }; mediaStore.addPlaylist(name); mediaStore.togglePlaylistItem(name, playlistTargetId.value); playlistTitle.value = '' }
+const playlistEditing = ref<string | null>(null)
+const selectedPlaylists = ref<string[]>([])
+const playlistRows = computed(() => Object.entries(mediaStore.playlists).map(([name, ids]) => ({ id: name, title: name, count: ids.length, selected: selectedPlaylists.value.includes(name) })))
+function showPlaylistPicker() {
+  if (!contextMenuItem.value) return
+  playlistTargetId.value = contextMenuItem.value.id
+  playlistTargetTitle.value = contextMenuItem.value.name
+  selectedPlaylists.value = playlistSelection(mediaStore.playlists, playlistTargetId.value)
+  playlistEditing.value = null
+  playlistTitle.value = ''
+  playlistError.value = ''
+  playlistVisible.value = true
+  handleContextMenuClose()
+}
+function savePlaylistSelection() {
+  mediaStore.playlists = applyPlaylistSelection(mediaStore.playlists, playlistTargetId.value, selectedPlaylists.value)
+  playlistVisible.value = false
+}
+function startPlaylistName(name = '') {
+  playlistEditing.value = name
+  playlistTitle.value = name
+  playlistError.value = ''
+}
+function confirmPlaylistName() {
+  const name = playlistTitle.value.trim(), oldName = playlistEditing.value
+  if (!name || oldName === null) return
+  if (Object.keys(mediaStore.playlists).some(existing => existing.toLocaleLowerCase() === name.toLocaleLowerCase() && existing !== oldName)) {
+    playlistError.value = t('posterMenu.duplicatePlaylist')
+    return
+  }
+  if (oldName) {
+    mediaStore.renamePlaylist(oldName, name)
+    selectedPlaylists.value = selectedPlaylists.value.map(selected => selected === oldName ? name : selected)
+  } else mediaStore.addPlaylist(name)
+  playlistEditing.value = null
+}
+function togglePlaylistSelection(name: string) {
+  selectedPlaylists.value = selectedPlaylists.value.includes(name) ? selectedPlaylists.value.filter(selected => selected !== name) : [...selectedPlaylists.value, name]
+}
+function removePlaylist(name: string) {
+  mediaStore.removePlaylist(name)
+  selectedPlaylists.value = selectedPlaylists.value.filter(selected => selected !== name)
+}
 const selectedBrowseIds = ref<string[]>([])
 const handleBrowseClick = (item: MediaLibraryItem) => {
   if (!effectiveBrowseSelection.value) {
@@ -982,7 +856,6 @@ const mediaServerRegistry = useMediaServerRegistryStore()
 const mediaServerNavigation = useMediaServerNavigationStore()
 const mediaPanFileStore = useMediaPanFileStore()
 const mediaPanTreeStore = useMediaPanTreeStore()
-const localHomePreferences = useLocalMediaHomePreferencesStore()
 
 // 状态
 const activeTab = ref('recently-added')
@@ -994,10 +867,11 @@ const contextMenuItem = ref<MediaLibraryItem | null>(null)
 const manualMetadataVisible = ref(false)
 const manualMetadataTarget = ref<MediaLibraryItem | null>(null)
 const manualMetadataDefaultsToWholeTvSeries = ref(false)
-const selectedGenre = ref('')
-const selectedYear = ref('')
-const selectedRating = ref('')
+const selectedGenre = ref(props.selectedGenre || '')
+const selectedYear = ref(props.selectedYear || '')
+const selectedRating = ref(props.selectedRating || '')
 const selectedCast = ref('')
+const selectedPersonId = ref<number>()
 const selectedCountry = ref('')
 const selectedPlaylist = ref('')
 const localSearchQuery = ref(props.searchQuery || '')
@@ -1006,6 +880,15 @@ const posterType = ref<'portrait' | 'landscape'>('portrait')
 watch(() => props.browseMode, mode => { if (mode) viewMode.value = mode }, { immediate: true })
 const showingDetail = ref(false)
 const currentMediaItem = ref<MediaLibraryItem>()
+let restoreDetailFilters: (() => void) | undefined
+function returnToTagDetail() {
+  if (!restoreDetailFilters || !currentMediaItem.value) return false
+  restoreDetailFilters()
+  restoreDetailFilters = undefined
+  emit('tagTitleChange', '')
+  showingDetail.value = true
+  return true
+}
 const mediaServerSearchLoading = ref(false)
 const mediaServerSearchError = ref('')
 const mediaServerSearchCollapsed = ref(false)
@@ -1030,10 +913,6 @@ const toggleMediaServerSection = () => {
   }
 }
 
-const localHomeManagerVisible = ref(false)
-const homeSearchQuery = ref('')
-const draggingLocalHomeSectionId = ref<LocalMediaHomeSectionKey | ''>('')
-const localHomeManagerDraft = ref<Array<{ key: LocalMediaHomeSectionKey; title: string; visible: boolean }>>([])
 
 // 文件夹文件列表
 const folderFileList = ref<any[]>([])
@@ -1054,10 +933,14 @@ watch(
       currentMediaItem.value = undefined
     }
     selectedGenre.value = props.selectedGenre || ''
+    restoreDetailFilters = undefined
+    if (!showingDetail.value) currentMediaItem.value = undefined
     selectedYear.value = props.selectedYear || ''
     selectedRating.value = props.selectedRating || ''
     selectedCast.value = ''
+    selectedPersonId.value = undefined
     selectedCountry.value = ''
+    emit('tagTitleChange', '')
     if (props.activeCategory !== 'playlist') {
       selectedPlaylist.value = ''
     }
@@ -1095,10 +978,10 @@ const isLoadingPage = ref(false)
 let pageRequestId = 0
 
 const getMediaPageQuery = () => {
-  const category = props.activeCategory || activeTab.value
-  const selectedGenreValue = props.selectedGenre || selectedGenre.value
-  const selectedYearValue = props.selectedYear || selectedYear.value
-  const selectedRatingValue = props.selectedRating || selectedRating.value
+  const category = selectedCast.value ? 'all' : props.activeCategory || activeTab.value
+  const selectedGenreValue = selectedGenre.value
+  const selectedYearValue = selectedYear.value
+  const selectedRatingValue = selectedRating.value
   const query = (localSearchQuery.value || '').trim().toLowerCase()
   const watchedIds = mediaStore.watchedItems
   const type: MediaLibraryItem['type'] | undefined = category === 'movies' ? 'movie' : ['tv', 'tv-shows'].includes(category) ? 'tv' : category === 'unmatched' ? 'unmatched' : undefined
@@ -1117,7 +1000,7 @@ const getMediaPageQuery = () => {
       const [min, max] = selectedRatingValue.split('-').map(Number)
       if (!item.rating || item.rating < min || item.rating > max) return false
     }
-    if (selectedCast.value && !item.credits?.cast?.some(c => c.name?.toLowerCase().includes(selectedCast.value.toLowerCase()))) return false
+    if (selectedCast.value && !matchesMediaPerson(item, selectedCast.value, selectedPersonId.value)) return false
     if (selectedCountry.value && !(item.productionCountries || []).some(country => country.toLowerCase().includes(selectedCountry.value.toLowerCase()))) return false
     return !query || item.name?.toLowerCase().includes(query)
   }
@@ -1125,7 +1008,7 @@ const getMediaPageQuery = () => {
 }
 
 const loadMediaPage = async (reset = false) => {
-  if (props.selectedFolder && folderFileList.value.length > 0) {
+  if (!selectedCast.value && props.selectedFolder && folderFileList.value.length > 0) {
     pagedItems.value = []
     pagedTotal.value = 0
     return
@@ -1172,7 +1055,7 @@ watch(() => props.browseSelection, () => { localSelection.value = false; selecte
 watch(() => props.localOnly, () => void loadMediaPage(true))
 
 watch(
-  () => [props.activeCategory, props.selectedFolder?.id, props.selectedGenre, props.selectedYear, props.selectedRating, activeTab.value, selectedPlaylist.value, selectedCast.value, selectedCountry.value, localSearchQuery.value, mediaStore.watchedItems.join('\n'), mediaStore.favorites.join('\n'), mediaStore.recentlyAdded.length, mediaStore.isScanning],
+  () => [props.activeCategory, props.selectedFolder?.id, props.selectedGenre, props.selectedYear, props.selectedRating, selectedGenre.value, selectedYear.value, selectedRating.value, activeTab.value, selectedPlaylist.value, selectedCast.value, selectedCountry.value, localSearchQuery.value, mediaStore.watchedItems.join('\n'), mediaStore.favorites.join('\n'), mediaStore.recentlyAdded.length, mediaStore.isScanning],
   () => void loadMediaPage(true)
 )
 
@@ -1186,10 +1069,6 @@ const showSearchResults = computed(() => {
   return true
 })
 
-const isHomeView = computed(() => {
-  const category = props.activeCategory || activeTab.value
-  return category === 'home' && !props.selectedFolder
-})
 
 const showMediaServerSearchPanel = computed(() => {
   return isSearchView.value
@@ -1213,7 +1092,7 @@ const showPlaylistBackBar = computed(() => {
 })
 const showHomeBackBar = computed(() => {
   if (!props.fromHomeNavigation) return false
-  if (isSearchView.value || props.selectedFolder || isHomeView.value) return false
+  if (isSearchView.value || props.selectedFolder) return false
   return true
 })
 const showHeaderBackButton = computed(() => showHomeBackBar.value)
@@ -1230,7 +1109,7 @@ const quickSearchCategories = new Set([
   'documentary', 'animation', 'unmatched', 'unwatched', 'favorites'
 ])
 const showQuickSearch = computed(() => {
-  if (isSearchView.value || isHomeView.value || props.selectedFolder) return false
+  if (isSearchView.value || props.selectedFolder) return false
   const category = props.activeCategory || activeTab.value
   return quickSearchCategories.has(category) || showDrillDownBackBar.value || showPlaylistBackBar.value
 })
@@ -1294,7 +1173,6 @@ const showCategoryView = computed(() => {
 
 const showBrowseModeToggle = computed(() => {
   if (isSearchView.value) return false
-  if (isHomeView.value) return false
   return !showingDetail.value
 })
 
@@ -1332,294 +1210,6 @@ const unwatchedItems = computed(() => mediaStore.mediaItems.filter(item => !isMe
 const favoriteItems = computed(() => mediaStore.favorites
   .map(favoriteIdToMediaItem)
   .filter((item): item is MediaLibraryItem => Boolean(item)))
-
-const localItemToNode = (
-  item: MediaLibraryItem | MediaListItem,
-  options: {
-    posterType?: 'portrait' | 'landscape'
-    title?: string
-    overview?: string
-    kind?: MediaServerLibraryNode['kind']
-    progress?: number
-  } = {}
-): MediaServerLibraryNode => {
-  const kind = options.kind || (item.type === 'movie' ? 'movie' : item.type === 'tv' ? 'series' : 'folder')
-  return {
-    id: item.id,
-    serverId: 'local-media-library',
-    provider: 'jellyfin',
-    kind,
-    rawType: kind,
-    title: options.title || item.name,
-    overview: options.overview ?? item.overview ?? '',
-    poster: item.posterUrl,
-    backdrop: item.backdropUrl,
-    images: {
-      primary: item.posterUrl,
-      backdrop: item.backdropUrl
-    },
-    year: item.year ? Number(item.year) : undefined,
-    rating: typeof item.rating === 'number' ? item.rating : undefined,
-    progress: options.progress,
-    parentTitle: item.type === 'tv' && getEpisodeTitleSuffix(item) ? getEpisodeTitleSuffix(item) : undefined,
-    isPlayed: isMediaWatched(item as MediaLibraryItem, mediaStore.watchedItems),
-    isFavorite: mediaStore.isFavorite?.(item.id) || false,
-    coverageBadge: getMediaCoverage(item)?.summary
-  }
-}
-
-const localContinueCards = computed<MediaServerCardItem[]>(() => continueWatchingItems.value.slice(0, 12).map((item) => ({
-  ...localItemToNode(item, {
-    kind: item.type === 'tv' ? 'episode' : 'movie',
-    title: item.name,
-    overview: String((item as MediaListItem).continueEpisodeLabel || ''),
-    progress: typeof item.watchProgress === 'number' ? Math.round((item.watchProgress || 0) * 100) : undefined
-  })
-})))
-
-const getFolderSourceLabel = (folder: any) => {
-  const connectionId = folder.userId || getWebDavConnectionId(folder.driveId)
-  if (connectionId && getWebDavConnection(connectionId)?.kind === 'alist') return 'AList 文件源'
-  if (folder.driveServerId === 'webdav' || (folder.driveId || '').startsWith('webdav:')) return 'WebDAV 文件源'
-  if (folder.driveId === 'local' || folder.driveServerId === 'local') return '本地文件夹'
-  if (folder.driveId === 'cloud123' || folder.driveServerId === 'cloud123') return '123 云盘'
-  if (folder.driveId === 'drive115' || folder.driveServerId === 'drive115') return '115 网盘'
-  if (folder.driveId === 'baidu' || folder.driveServerId === 'baidu') return '百度网盘'
-  if (folder.driveId === 'pikpak' || folder.driveServerId === 'pikpak') return 'PikPak'
-  if (folder.driveId === 'quark' || folder.driveServerId === 'quark') return '夸克网盘'
-  if (folder.driveId === 'dropbox' || folder.driveServerId === 'dropbox') return 'Dropbox'
-  if (folder.driveId === 'onedrive' || folder.driveServerId === 'onedrive') return 'OneDrive'
-  if (folder.driveId === 'box' || folder.driveServerId === 'box') return 'Box'
-  if (folder.driveId === 'cloud139' || folder.driveServerId === 'cloud139') return '139 云盘'
-  if (folder.driveId === 'cloud189' || folder.driveServerId === 'cloud189') return '天翼云盘'
-  if (folder.driveId === 'guangya' || folder.driveServerId === 'guangya') return '光鸭云盘'
-  return '阿里云盘'
-}
-
-const getFolderCoverImage = (folder: any) => {
-  const related = mediaStore.mediaItems.find((item) => item.folderId === folder.id || (folder.path && item.folderPath === folder.path))
-  return related?.posterUrl || related?.backdropUrl || ''
-}
-
-const localShortcutSections = computed(() => {
-  const genres = mediaStore.genreCategories.slice(0, 18).map((item) => ({
-    key: `genre-${item.name}`,
-    title: item.name,
-    description: `${item.count} 项`,
-    icon: 'iconwbiaoqian',
-    count: item.count,
-    coverImages: getDeterministicCoverImages(item),
-    cardType: 'genre' as const,
-    action: () => handleCategoryClick({ name: item.name, type: 'genre', count: item.count })
-  }))
-
-  const ratings = mediaStore.ratingCategories.slice(0, 18).map((item) => ({
-    key: `rating-${item.name}`,
-    title: item.name.replace('分', ''),
-    description: `${item.count} 项`,
-    icon: 'iconcrown2',
-    count: item.count,
-    coverImages: getDeterministicCoverImages(item),
-    cardType: 'rating' as const,
-    action: () => handleCategoryClick({ name: item.name, type: 'rating', count: item.count })
-  }))
-
-  const years = mediaStore.yearGroups.slice(0, 18).map((item) => ({
-    key: `year-${item.name}`,
-    title: item.name,
-    description: `${item.count} 项`,
-    icon: 'iconcalendar',
-    count: item.count,
-    coverImages: getDeterministicCoverImages(item),
-    cardType: 'year' as const,
-    action: () => handleCategoryClick({ name: item.name, type: 'year', count: item.count })
-  }))
-
-  const playlists = playlistItems.value.slice(0, 18).map((item) => ({
-    key: `playlist-${item.name}`,
-    title: item.name,
-    description: `${item.count} 项`,
-    icon: 'iconlist',
-    count: item.count,
-    coverImages: item.coverImage ? [item.coverImage] : [],
-    cardType: 'playlist' as const,
-    action: () => {
-      selectedPlaylist.value = item.name
-      emit('navigateCategory', 'playlist')
-    }
-  }))
-
-  const folderEntries = mediaStore.folders.map((folder) => ({
-    key: `folder-${folder.id}`,
-    title: folder.name,
-    description: getFolderSourceLabel(folder),
-    icon: 'iconfolder',
-    action: () => emit('navigateFolder', folder)
-  }))
-
-  return {
-    genres,
-    ratings,
-    years,
-    playlists,
-    folders: folderEntries
-  }
-})
-
-const localHomeSections = computed<LocalHomeMediaSection[]>(() => {
-  const sections: LocalHomeMediaSection[] = [
-    {
-      key: 'continue',
-      kind: 'continue',
-      title: t('mediaLibrary.continue')
-    },
-    {
-      key: 'recent',
-      kind: 'media',
-      title: t('mediaLibrary.recent'),
-      category: 'recently-added',
-      posterType: localHomePreferences.recentlyAddedPosterType,
-      items: mediaStore.recentlyAdded.slice(0, 18).map((item) => localItemToNode(item)),
-    },
-    {
-      key: 'movies',
-      kind: 'media',
-      title: t('mediaLibrary.movies'),
-      category: 'movies',
-      posterType: localHomePreferences.libraryPosterType,
-      items: mediaStore.movies.slice(0, 18).map((item) => localItemToNode(item)),
-    },
-    {
-      key: 'tv',
-      kind: 'media',
-      title: t('mediaLibrary.tv'),
-      category: 'tv-shows',
-      posterType: localHomePreferences.libraryPosterType,
-      items: mediaStore.tvShows.slice(0, 18).map((item) => localItemToNode(item, { kind: 'series' })),
-    },
-    {
-      key: 'documentary',
-      kind: 'media',
-      title: t('mediaLibrary.documentary'),
-      category: 'documentary',
-      posterType: localHomePreferences.libraryPosterType,
-      items: documentaryItems.value.slice(0, 18).map((item) => localItemToNode(item)),
-    },
-    {
-      key: 'animation',
-      kind: 'media',
-      title: t('mediaLibrary.animation'),
-      category: 'animation',
-      posterType: localHomePreferences.libraryPosterType,
-      items: animationItems.value.slice(0, 18).map((item) => localItemToNode(item)),
-    },
-    {
-      key: 'unmatched',
-      kind: 'media',
-      title: t('mediaLibrary.unmatched'),
-      category: 'unmatched',
-      posterType: localHomePreferences.libraryPosterType,
-      items: mediaStore.unmatchedItems.slice(0, 18).map((item) => localItemToNode(item, { kind: 'folder' })),
-    },
-    {
-      key: 'unwatched',
-      kind: 'media',
-      title: t('mediaLibrary.unwatched'),
-      category: 'unwatched',
-      posterType: localHomePreferences.libraryPosterType,
-      items: unwatchedItems.value.slice(0, 18).map((item) => localItemToNode(item)),
-    },
-    {
-      key: 'favorites',
-      kind: 'media',
-      title: t('mediaLibrary.favorite'),
-      category: 'favorites',
-      posterType: localHomePreferences.libraryPosterType,
-      items: favoriteItems.value.slice(0, 18).map((item) => localItemToNode(item)),
-    },
-    {
-      key: 'playlists',
-      kind: 'shortcut',
-      title: t('mediaLibrary.playlist'),
-      variant: 'banner',
-      entries: localShortcutSections.value.playlists
-    },
-    {
-      key: 'genres',
-      kind: 'shortcut',
-      title: t('mediaLibrary.genres'),
-      variant: 'banner',
-      entries: localShortcutSections.value.genres
-    },
-    {
-      key: 'ratings',
-      kind: 'shortcut',
-      title: t('mediaLibrary.ratings'),
-      variant: 'banner',
-      entries: localShortcutSections.value.ratings
-    },
-    {
-      key: 'years',
-      kind: 'shortcut',
-      title: t('mediaLibrary.years'),
-      variant: 'banner',
-      entries: localShortcutSections.value.years
-    },
-    {
-      key: 'folders',
-      kind: 'shortcut',
-      title: t('mediaLibrary.folders'),
-      variant: 'mini',
-      entries: localShortcutSections.value.folders
-    }
-  ]
-
-  return sections.filter((section) => {
-    if (section.key === 'folders') return false
-    if (section.key === 'recent' && !localHomePreferences.showRecentlyAdded) return false
-    if (section.kind === 'continue') return localContinueCards.value.length > 0
-    if (section.kind === 'media') return (section.items?.length || 0) > 0
-    return (section.entries?.length || 0) > 0
-  })
-})
-
-const orderedLocalHomeSections = computed(() => {
-  const order = localHomePreferences.homeSectionOrder || []
-  if (!order.length) return localHomeSections.value
-  const byKey = new Map(localHomeSections.value.map((section) => [section.key, section]))
-  const ordered = order.map((key) => byKey.get(key)).filter((section): section is LocalHomeMediaSection => !!section)
-  const rest = localHomeSections.value.filter((section) => !order.includes(section.key))
-  return [...ordered, ...rest]
-})
-
-const matchesLocalHomeSearch = (item: MediaServerLibraryNode | MediaServerCardItem, query: string) => {
-  const searchable = [item.title, item.parentTitle, item.overview, item.year].filter((value) => value !== undefined && value !== null).join(' ').toLowerCase()
-  return searchable.includes(query)
-}
-
-const filteredLocalContinueCards = computed(() => {
-  const query = homeSearchQuery.value.trim().toLowerCase()
-  return query ? localContinueCards.value.filter((item) => matchesLocalHomeSearch(item, query)) : localContinueCards.value
-})
-
-const visibleLocalHomeSections = computed(() => {
-  const hidden = new Set(localHomePreferences.hiddenHomeSectionIds || [])
-  const query = homeSearchQuery.value.trim().toLowerCase()
-  return orderedLocalHomeSections.value.flatMap((section) => {
-    if (hidden.has(section.key)) return []
-    if (!query) return [section]
-    if (section.kind === 'continue') return filteredLocalContinueCards.value.length > 0 ? [section] : []
-    if (section.kind !== 'media') return []
-    const items = (section.items || []).filter((item) => matchesLocalHomeSearch(item, query))
-    return items.length > 0 ? [{ ...section, items }] : []
-  })
-})
-
-const getLocalHomeSectionTotalCount = (section: LocalHomeMediaSection) => {
-  if (section.kind === 'continue') return filteredLocalContinueCards.value.length
-  if (section.kind === 'media') return section.items?.length || 0
-  return (section.entries || []).reduce((total, entry) => total + (entry.count || 0), 0)
-}
 
 const currentCategorySourceItems = computed<MediaLibraryItem[]>(() => {
   const category = props.activeCategory || activeTab.value
@@ -1942,7 +1532,7 @@ const contextMenuStyle = computed(() => {
 
 const contextMenuInContinueWatching = computed(() => {
   if (!contextMenuItem.value) return false
-  return mediaStore.continueWatching.some(item => item.id === contextMenuItem.value!.id)
+  return mediaStore.continueWatching.some(item => isContinueWatchingMember(item, contextMenuItem.value!))
 })
 
 // 方法
@@ -1967,7 +1557,7 @@ const handleBrowserFileAction = async (action: string, file: IAliGetFileModel) =
   contextMenuItem.value = target
   if (action === 'share') openMediaShare({ id: target.id, title: target.name, year: target.year, overview: target.overview, files: target.driveFiles })
   else if (action === 'metadata') openManualMetadataEditor()
-  else if (action === 'continue') { mediaStore.addToContinueWatching(target); handleContextMenuClose() }
+  else if (action === 'continue') { handleContextMenuClose(); await updateWatching(target) }
   else if (action === 'playlist') showPlaylistPicker()
 }
 const openContextMenu = (event: MouseEvent, item: MediaLibraryItem) => {
@@ -1986,11 +1576,14 @@ const handlePosterAction = (action: PosterAction) => {
  if (action === 'metadata') { openManualMetadataEditor(); return }
  if (action === 'playlist') { showPlaylistPicker(); return }
  if (action === 'delete') { deleteMediaFromMenu(); return }
- if (action === 'continue' && contextMenuItem.value) mediaStore.addToContinueWatching(contextMenuItem.value)
+ if (action === 'continue' && contextMenuItem.value) { const target = contextMenuItem.value; handleContextMenuClose(); void updateWatching(target); return }
  if (action === 'select' && contextMenuItem.value) { localSelection.value = true; if (!selectedBrowseIds.value.includes(contextMenuItem.value.id)) selectedBrowseIds.value.push(contextMenuItem.value.id) }
  handleContextMenuClose()
 }
 const openSeriesFromMenu = () => { if (contextMenuItem.value) openCustomSeries({ id: contextMenuItem.value.id, title: contextMenuItem.value.name }); handleContextMenuClose() }
+async function updateWatching(target: MediaLibraryItem) {
+  try { await toggleContinueWatching(mediaStore, target) } catch (error) { message.error(error instanceof Error ? error.message : '更新观看列表失败') }
+}
 const handleContextMenuClose = () => {
   showContextMenu.value = false
   contextMenuItem.value = null
@@ -2113,16 +1706,25 @@ const handleMetadataUpdated = (item: MediaLibraryItem) => {
 }
 
 // 处理详情页标签点击
-const handleDetailTagClick = (tagType: string, tagValue: string) => {
+const handleDetailTagClick = (tagType: string, tagValue: string, personId?: number) => {
   console.log(`Tag clicked: ${tagType} = ${tagValue}`)
 
   // 返回列表并应用筛选
+  const previous = { genre: selectedGenre.value, year: selectedYear.value, rating: selectedRating.value, cast: selectedCast.value, country: selectedCountry.value, personId: selectedPersonId.value }
+  restoreDetailFilters = () => {
+    selectedGenre.value = previous.genre
+    selectedYear.value = previous.year
+    selectedRating.value = previous.rating
+    selectedCast.value = previous.cast
+    selectedCountry.value = previous.country
+    selectedPersonId.value = previous.personId
+  }
   showingDetail.value = false
-  currentMediaItem.value = undefined
   selectedGenre.value = ''
   selectedYear.value = ''
   selectedRating.value = ''
   selectedCast.value = ''
+  selectedPersonId.value = undefined
   selectedCountry.value = ''
 
   // 根据标签类型设置筛选条件
@@ -2135,12 +1737,14 @@ const handleDetailTagClick = (tagType: string, tagValue: string) => {
       break
     case 'cast':
       selectedCast.value = tagValue
+      selectedPersonId.value = personId
       break
     case 'country':
       selectedCountry.value = tagValue
       break
     // 可以扩展更多标签类型
   }
+  emit('tagTitleChange', tagValue)
 }
 
 const categoryListPalette = [
@@ -2390,6 +1994,15 @@ const resolvePlayableMediaItem = (item: MediaLibraryItem) => {
   return { aliFile, entry: buildPlaylistEntry(aliFile, item.name) }
 }
 
+async function resumeMedia(item: MediaLibraryItem) {
+  const files = item.type === 'tv'
+    ? (item.seasons || []).flatMap(season => season.episodes || []).flatMap(episode => episode.driveFiles || [])
+    : item.driveFiles || []
+  const file = files.find(file => file.id === item.lastPlayedFileId) || files[0]
+  if (!file) { message.warning(t('mediaLibrary.noPlayableVideo')); return }
+  await menuOpenFile(buildAliFileModel(file), '')
+}
+
 function shuffleInPlace<T>(items: T[]): void {
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]] }
 }
@@ -2466,12 +2079,16 @@ function compareBrowseItems(a: MediaLibraryItem, b: MediaLibraryItem) {
 async function playBrowse(mode: 'play' | 'loop' | 'shuffle', folderId?: string) {
   const { type, predicate } = getMediaPageQuery()
   const items = await DB.getMediaLibraryPage({ type, predicate, limit: Number.MAX_SAFE_INTEGER, sort: compareBrowseItems })
-  const playable = items.filter(item => (!folderId || item.folderId === folderId)).filter(item => !effectiveBrowseSelection.value || selectedBrowseIds.value.includes(item.id)).map(resolvePlayableMediaItem).filter((item): item is NonNullable<ReturnType<typeof resolvePlayableMediaItem>> => !!item)
+  return playItems(items.filter(item => (!folderId || item.folderId === folderId)).filter(item => !effectiveBrowseSelection.value || selectedBrowseIds.value.includes(item.id)), mode, resultBarTitle.value)
+}
+
+async function playItems(items: MediaLibraryItem[], mode: 'play' | 'loop' | 'shuffle', title: string) {
+  const playable = items.map(resolvePlayableMediaItem).filter((item): item is NonNullable<ReturnType<typeof resolvePlayableMediaItem>> => !!item)
   if (mode === 'shuffle') {
     for (let i = playable.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [playable[i], playable[j]] = [playable[j], playable[i]] }
   }
   if (!playable.length) { message.warning(t('mediaLibrary.noPlayableVideo')); return }
-  await menuOpenFile(playable[0].aliFile, '', { customPlaylistLabel: resultBarTitle.value, customPlaylist: playable.map(item => item.entry), playlistLoop: mode === 'loop' })
+  await menuOpenFile(playable[0].aliFile, '', { customPlaylistLabel: title, customPlaylist: playable.map(item => item.entry), playlistLoop: mode === 'loop' })
 }
 
 // 显示文件夹文件列表
@@ -2724,12 +2341,12 @@ const refreshLibrary = () => {
 onMounted(() => {
   // 初始化媒体库
   mediaServerRegistry.ensureLoaded()
-  localHomePreferences.ensureLoaded()
   void loadMediaPage(true)
 })
 
 // 定义事件
 const emit = defineEmits<{
+  tagTitleChange: [title: string]
   detailVisibilityChange: [visible: boolean]
   categoryDrillDown: [data: {
     categoryType: string
@@ -2750,197 +2367,6 @@ const emit = defineEmits<{
 
 watch(() => showingDetail.value && !!currentMediaItem.value, visible => emit('detailVisibilityChange', visible), { immediate: true, flush: 'sync' })
 
-const localHomePosterMode = computed<LocalMediaHomePosterType>(() => {
-  if (localHomePreferences.libraryPosterType === 'landscape') return 'landscape'
-  if (localHomePreferences.recentlyAddedPosterType === 'landscape') return 'landscape'
-  return 'portrait'
-})
-
-const setLocalHomePosterMode = (value: LocalMediaHomePosterType) => {
-  localHomePreferences.setPartial({
-    recentlyAddedPosterType: value,
-    libraryPosterType: value
-  })
-}
-
-const findLocalMediaItemById = (id: string) => {
-  const itemId = String(id)
-  return favoriteIdToMediaItem(itemId)
-    || mediaStore.mediaItems.find((item) => String(item.id) === itemId)
-    || mediaStore.recentlyAdded.find((item) => String(item.id) === itemId)
-    || continueWatchingItems.value.find((item) => String(item.id) === itemId)
-    || null
-}
-
-const handleLocalHomeResumePlay = (item: MediaServerCardItem) => {
-  const target = findLocalMediaItemById(item.id)
-  if (target) openMedia(target)
-}
-
-const handleLocalHomeNodeSelect = (item: MediaServerLibraryNode) => {
-  if (item.id.startsWith('playlist:')) {
-    emit('navigateCategory', 'playlist')
-    return
-  }
-  const target = findLocalMediaItemById(item.id)
-  if (target) openMedia(target)
-}
-
-const handleLocalHomeNodePlay = (item: MediaServerLibraryNode) => {
-  handleLocalHomeNodeSelect(item)
-}
-
-const openLocalHomeMetadataEditor = (item: MediaServerLibraryNode) => {
-  if (item.id.startsWith('playlist:')) return
-  const target = findLocalMediaItemById(item.id)
-  if (!target) return
-  manualMetadataTarget.value = target
-  manualMetadataDefaultsToWholeTvSeries.value = target.type === 'tv'
-  manualMetadataVisible.value = true
-}
-
-const handleLocalHomeCardAction = async (item: MediaServerCardItem | MediaServerLibraryNode, action: 'watched' | 'favorite' | 'download' | 'series' | 'share' | 'loop' | 'shuffle' | 'delete') => {
-  if (item.id.startsWith('playlist:')) return
-  const target = findLocalMediaItemById(item.id)
-  if (!target) return
-  if (action === 'share') { openMediaShare({ id: target.id, title: target.name, year: target.year, overview: target.overview, files: target.driveFiles }); return }
-  if (action === 'series') { openCustomSeries({ id: target.id, title: target.name }); return }
-  if (action === 'loop' || action === 'shuffle') { contextMenuItem.value = target; await playFromMenu(action === 'loop', action === 'shuffle'); return }
-  if (action === 'download') { await downloadMediaItem(target); return }
-  if (action === 'favorite') {
-    mediaStore.toggleFavorite(target.id)
-    message.success(mediaStore.isFavorite(target.id) ? t('mediaLibrary.addedFavorite') : t('mediaLibrary.removedFavorite'))
-    return
-  }
-  const nextWatched = !isMediaWatched(target, mediaStore.watchedItems)
-  toggleLocalMediaWatched(target)
-  message.success(nextWatched ? t('mediaLibrary.markedWatched') : t('mediaLibrary.markedUnwatched'))
-}
-
-const handleLocalHomeSeeAll = (section: LocalHomeMediaSection) => {
-  if (section.category) emit('navigateCategory', section.category)
-}
-
-const handleLocalShortcutSelect = (entry: { action: () => void }) => {
-  entry.action()
-}
-
-const handleLocalShortcutSeeAll = (sectionKey: LocalMediaHomeSectionKey) => {
-  switch (sectionKey) {
-    case 'genres':
-      emit('navigateCategory', 'genres')
-      break
-    case 'ratings':
-      emit('navigateCategory', 'ratings')
-      break
-    case 'years':
-      emit('navigateCategory', 'years')
-      break
-    case 'playlists':
-      emit('navigateCategory', 'playlist')
-      break
-  }
-}
-
-const localHomeSectionTitleMap: Record<LocalMediaHomeSectionKey, string> = {
-  continue: '继续观看',
-  recent: '最近添加',
-  movies: t('mediaLibrary.movies'),
-  tv: '电视剧',
-  documentary: t('mediaLibrary.documentary'),
-  animation: t('mediaLibrary.animation'),
-  unmatched: t('mediaLibrary.unmatched'),
-  unwatched: t('mediaLibrary.unwatched'),
-  favorites: t('mediaLibrary.favorite'),
-  playlists: '播放列表',
-  genres: '分类',
-  ratings: t('mediaLibrary.ratings'),
-  years: t('mediaLibrary.years'),
-  folders: '文件源'
-}
-
-const openLocalHomeManager = () => {
-  const hiddenSections = new Set(localHomePreferences.hiddenHomeSectionIds || [])
-  localHomeManagerDraft.value = orderedLocalHomeSections.value.map((section) => ({
-    key: section.key,
-    title: localHomeSectionTitleMap[section.key],
-    visible: !hiddenSections.has(section.key)
-  }))
-  draggingLocalHomeSectionId.value = ''
-  localHomeManagerVisible.value = true
-}
-
-const cancelLocalHomeManager = () => {
-  localHomeManagerVisible.value = false
-  draggingLocalHomeSectionId.value = ''
-}
-
-const toggleLocalHomeDraftVisible = (sectionKey: LocalMediaHomeSectionKey, value: any) => {
-  const checked = typeof value === 'boolean' ? value : !!value
-  localHomeManagerDraft.value = localHomeManagerDraft.value.map((item) =>
-    item.key === sectionKey ? { ...item, visible: checked } : item
-  )
-}
-
-const moveLocalHomeDraftItem = (sourceKey: LocalMediaHomeSectionKey, targetKey: LocalMediaHomeSectionKey) => {
-  const draft = [...localHomeManagerDraft.value]
-  const sourceIndex = draft.findIndex((item) => item.key === sourceKey)
-  const targetIndex = draft.findIndex((item) => item.key === targetKey)
-  if (sourceIndex < 0 || targetIndex < 0) return
-  const [moved] = draft.splice(sourceIndex, 1)
-  draft.splice(targetIndex, 0, moved)
-  localHomeManagerDraft.value = draft
-}
-
-const handleLocalHomeDragStart = (event: DragEvent, sectionKey: LocalMediaHomeSectionKey) => {
-  draggingLocalHomeSectionId.value = sectionKey
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.dropEffect = 'move'
-    event.dataTransfer.setData('text/plain', sectionKey)
-  }
-}
-
-const handleLocalHomeDrop = (targetKey: LocalMediaHomeSectionKey) => {
-  const sourceKey = draggingLocalHomeSectionId.value
-  if (!sourceKey || sourceKey === targetKey) return
-  moveLocalHomeDraftItem(sourceKey, targetKey)
-}
-
-const handleLocalHomeDragEnd = () => {
-  draggingLocalHomeSectionId.value = ''
-}
-
-const handleLocalHomePointerDragStart = (sectionKey: LocalMediaHomeSectionKey) => {
-  draggingLocalHomeSectionId.value = sectionKey
-  const handlePointerMove = (event: MouseEvent) => {
-    const target = document.elementFromPoint(event.clientX, event.clientY)
-    const row = target?.closest?.('.home-library-manager-item') as HTMLElement | null
-    const targetKey = row?.dataset.sectionKey as LocalMediaHomeSectionKey | undefined
-    if (targetKey && targetKey !== draggingLocalHomeSectionId.value) {
-      moveLocalHomeDraftItem(draggingLocalHomeSectionId.value as LocalMediaHomeSectionKey, targetKey)
-    }
-  }
-  const handlePointerUp = () => {
-    draggingLocalHomeSectionId.value = ''
-    window.removeEventListener('mousemove', handlePointerMove)
-    window.removeEventListener('mouseup', handlePointerUp)
-  }
-  window.addEventListener('mousemove', handlePointerMove)
-  window.addEventListener('mouseup', handlePointerUp, { once: true })
-}
-
-const saveLocalHomeManager = () => {
-  const draft = localHomeManagerDraft.value
-  const hiddenKeys = draft.filter((item) => !item.visible).map((item) => item.key)
-  localHomePreferences.setPartial({
-    homeSectionOrder: draft.map((item) => item.key),
-    hiddenHomeSectionIds: hiddenKeys
-  })
-  localHomeManagerVisible.value = false
-  draggingLocalHomeSectionId.value = ''
-}
-
 const handleDrillDownBack = () => {
   if (props.selectedGenre) {
     emit('categoryDrillBack', { categoryType: 'genre' })
@@ -2960,6 +2386,7 @@ const handlePlaylistBack = () => {
 }
 
 const handleResultBack = () => {
+  if (returnToTagDetail()) return
   if (showHomeBackBar.value) {
     emit('homeNavigationBack')
     return
@@ -3089,6 +2516,9 @@ const mediaServerKindLabel = (kind: MediaServerLibraryNode['kind']) => {
 
 // 暴露给父组件的方法
 defineExpose({
+  resumeMedia,
+  returnToTagDetail,
+  playItems,
   posterAction: (item: MediaLibraryItem, action: PosterAction) => { contextMenuItem.value = item; handlePosterAction(action) },
   playBrowse,
   openMedia,
@@ -3432,6 +2862,13 @@ defineExpose({
 
 .search-media-server-state.error {
   color: #dc2626;
+}
+
+.search-media-server-state:has(.media-loading-indicator) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
 .search-media-server-group {
@@ -4427,58 +3864,6 @@ defineExpose({
   transform: translateY(-2px);
 }
 
-.library-home-page {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  padding: 20px 2px 2px;
-}
-
-.library-home-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.library-home-toolbar-spacer {
-  flex: 1;
-}
-
-.library-home-toolbar-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.library-home-search {
-  width: min(280px, 32vw);
-}
-
-.library-home-search :deep(.arco-input-wrapper) {
-  height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.library-home-search-empty {
-  display: flex;
-  min-height: 180px;
-  flex-direction: column;
-  gap: 10px;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-3);
-  font-size: 13px;
-}
-
-.library-home-search-empty .iconfont {
-  font-size: 28px;
-}
-
 .toolbar-btn {
   display: inline-flex;
   align-items: center;
@@ -4634,46 +4019,6 @@ defineExpose({
   box-shadow: none;
 }
 
-.library-home-intro h3 {
-  margin: 0 0 8px;
-  font-size: 24px;
-  color: #111827;
-}
-
-.library-home-intro p {
-  margin: 0;
-  color: #64748b;
-  line-height: 1.7;
-}
-
-.library-home-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.library-home-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 4px;
-}
-
-.library-home-section-header h4 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: #111827;
-}
-
-.library-home-section-header span {
-  display: block;
-  margin-top: 4px;
-  color: #94a3b8;
-  font-size: 13px;
-}
-
 .home-section-header {
   display: flex;
   align-items: center;
@@ -4697,208 +4042,7 @@ defineExpose({
   line-height: 30px;
 }
 
-.library-home-row {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  padding: 2px 8px 10px;
-  scroll-padding-inline: 8px;
-}
-
-.library-home-resume-card,
-.library-home-poster-tile,
-.library-home-mini-card {
-  flex: 0 0 auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.library-home-resume-card {
-  width: 320px;
-}
-
-.library-home-row-landscape .library-home-poster-tile {
-  width: 320px;
-}
-
-.library-home-row-portrait .library-home-poster-tile {
-  width: 150px;
-}
-
-.library-home-resume-poster,
-.library-home-poster-image {
-  position: relative;
-  overflow: hidden;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #dbeafe, #f8fafc);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
-}
-
-.library-home-resume-poster {
-  width: 320px;
-  height: 180px;
-}
-
-.library-home-poster-tile.poster-tile-landscape .library-home-poster-image {
-  width: 320px;
-  height: 180px;
-}
-
-.library-home-poster-tile.poster-tile-portrait .library-home-poster-image {
-  width: 150px;
-  height: 225px;
-}
-
-.library-home-resume-poster img,
-.library-home-poster-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.library-home-resume-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.18) 0%, rgba(15, 23, 42, 0.06) 45%, rgba(15, 23, 42, 0.42) 100%);
-}
-
-.library-home-play-indicator {
-  width: 62px;
-  height: 62px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #111827;
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
-}
-
-.library-home-play-indicator .iconfont {
-  font-size: 30px;
-  margin-left: 4px;
-}
-
-.library-home-poster-meta {
-  padding: 10px 4px 0;
-}
-
-.library-home-poster-meta h5 {
-  margin: 0 0 6px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #111827;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.library-home-poster-meta p {
-  margin: 0;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.library-home-row-category {
-  padding-top: 6px;
-}
-
-.library-home-row-banner {
-  padding-top: 2px;
-}
-
 /* CategoryCard on home page — fixed size for horizontal scroll */
-.library-home-category-card {
-  flex: 0 0 auto;
-  width: 260px;
-  min-height: 162px;
-}
-
-.library-home-mini-card {
-  min-width: 260px;
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(22px) saturate(140%);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-}
-
-.library-home-mini-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(96, 165, 250, 0.24);
-  box-shadow: 0 22px 42px rgba(96, 165, 250, 0.14);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(239, 246, 255, 0.86));
-}
-
-.library-home-mini-icon {
-  width: 50px;
-  height: 50px;
-  flex: 0 0 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(219, 234, 254, 0.74), rgba(191, 219, 254, 0.46));
-  color: #2563eb;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
-}
-
-.library-home-mini-icon .iconfont {
-  font-size: 24px;
-}
-
-.library-home-mini-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.library-home-mini-main h5 {
-  margin: 0 0 8px;
-  font-size: 18px;
-  font-weight: 700;
-  color: #111827;
-}
-
-.library-home-mini-main p {
-  margin: 0;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.library-home-mini-count {
-  flex: 0 0 auto;
-  min-width: 40px;
-  height: 40px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
-  color: #111827;
-  font-size: 15px;
-  font-weight: 800;
-}
 
 .detail-media-modal :deep(.arco-modal-content) {
   border-radius: 28px;
@@ -4922,112 +4066,11 @@ defineExpose({
   color: var(--app-mineradio-ink, #e8ecef);
 }
 
-.home-library-manager-panel {
-  padding: 8px 4px 2px;
-}
-
-.home-library-manager-hint {
-  margin: 0 0 14px 8px;
-  color: var(--app-mineradio-ink, #e8ecef);
-  opacity: 0.56;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.home-library-manager-list {
-  padding: 8px 18px;
-  border-radius: 16px;
-  border: 1px solid var(--app-glass-line, rgba(255, 255, 255, 0.06));
-  background: var(--app-glass-panel);
-  min-height: 280px;
-}
-
-.home-library-manager-item {
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  border-bottom: 1px solid var(--app-glass-line, rgba(255, 255, 255, 0.05));
-  cursor: default;
-  transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease;
-}
-
-.home-library-manager-item:last-child {
-  border-bottom: 0;
-}
-
-.home-library-manager-item.dragging {
-  opacity: 0.56;
-  transform: scale(0.99);
-}
-
-.home-library-manager-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.home-library-manager-item :deep(.arco-checkbox) {
-  flex: 1;
-  min-width: 0;
-}
-
-.home-library-manager-item :deep(.arco-checkbox-label) {
-  color: var(--app-mineradio-ink, #e8ecef);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.home-library-manager-drag-icon {
-  flex: 0 0 auto;
-  color: var(--app-mineradio-ink, #e8ecef);
-  opacity: 0.32;
-  font-size: 18px;
-  cursor: grab;
-  padding: 6px;
-  border-radius: 8px;
-  -webkit-user-drag: element;
-  user-select: none;
-}
-
-.home-library-manager-drag-icon:hover {
-  background: rgba(255, 255, 255, 0.06);
-  opacity: 0.6;
-}
-
-.home-library-manager-drag-icon:active {
-  cursor: grabbing;
-}
-
-.home-library-manager-empty {
-  padding: 56px 12px;
-  text-align: center;
-  color: var(--app-mineradio-ink, #e8ecef);
-  opacity: 0.32;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.home-library-manager-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 14px;
-  width: 100%;
-  margin-top: 18px;
-}
-
-[arco-theme='dark'] .library-home-intro h3,
-[arco-theme='dark'] .library-home-section-header h4,
-[arco-theme='dark'] .home-section-header h4,
-[arco-theme='dark'] .library-home-poster-meta h5,
-[arco-theme='dark'] .library-home-mini-main h5,
-[arco-theme='dark'] .library-home-mini-count {
+[arco-theme='dark'] .home-section-header h4 {
   color: rgba(244, 247, 252, 0.96);
 }
 
-[arco-theme='dark'] .library-home-intro p,
-[arco-theme='dark'] .library-home-section-header span,
-[arco-theme='dark'] .home-section-header span,
-[arco-theme='dark'] .library-home-poster-meta p,
-[arco-theme='dark'] .library-home-mini-main p {
+[arco-theme='dark'] .home-section-header span {
   color: rgba(203, 213, 225, 0.78);
 }
 
@@ -5069,27 +4112,6 @@ defineExpose({
 [arco-theme='dark'] .home-settings-select :deep(.arco-select-view-value),
 [arco-theme='dark'] .home-settings-select :deep(.arco-select-view-icon) {
   color: rgba(244, 247, 252, 0.96);
-}
-
-[arco-theme='dark'] .library-home-mini-card {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(28, 33, 44, 0.88), rgba(18, 22, 30, 0.8));
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.24);
-}
-
-[arco-theme='dark'] .library-home-mini-card:hover {
-  border-color: rgba(96, 165, 250, 0.26);
-  background: linear-gradient(180deg, rgba(35, 45, 68, 0.92), rgba(20, 27, 42, 0.86));
-  box-shadow: 0 24px 44px rgba(0, 0, 0, 0.28);
-}
-
-[arco-theme='dark'] .library-home-mini-icon {
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.26), rgba(30, 64, 175, 0.18));
-  color: #bfdbfe;
-}
-
-[arco-theme='dark'] .library-home-mini-count {
-  background: rgba(255, 255, 255, 0.08);
 }
 
 /* 分类聚合视图样式 */
@@ -5320,21 +4342,6 @@ defineExpose({
     gap: 12px;
   }
 
-  .library-home-resume-card,
-  .library-home-row-landscape .library-home-poster-tile {
-    width: 280px;
-  }
-
-  .library-home-resume-poster,
-  .library-home-poster-tile.poster-tile-landscape .library-home-poster-image {
-    width: 280px;
-    height: 158px;
-  }
-
-  .library-home-mini-card {
-    min-width: 220px;
-  }
-
   .category-list-card {
     height: 100px;
   }
@@ -5485,28 +4492,6 @@ body:not([arco-theme='dark']) .detail-media-modal .arco-modal-header {
 
 body:not([arco-theme='dark']) .detail-media-modal .arco-modal-title {
   color: rgba(17, 24, 39, 0.94) !important;
-}
-
-body:not([arco-theme='dark']) .detail-media-modal .home-library-manager-hint {
-  color: rgba(31, 41, 55, 0.76) !important;
-  opacity: 1 !important;
-}
-
-body:not([arco-theme='dark']) .detail-media-modal .home-library-manager-list {
-  color: rgba(17, 24, 39, 0.94) !important;
-  border-color: rgba(15, 23, 42, 0.08) !important;
-  background: rgba(255, 255, 255, 0.72) !important;
-}
-
-body:not([arco-theme='dark']) .detail-media-modal .home-library-manager-item .arco-checkbox-label,
-body:not([arco-theme='dark']) .detail-media-modal .home-library-manager-empty {
-  color: rgba(17, 24, 39, 0.92) !important;
-  opacity: 1 !important;
-}
-
-body:not([arco-theme='dark']) .detail-media-modal .home-library-manager-drag-icon {
-  color: rgba(17, 24, 39, 0.54) !important;
-  opacity: 1 !important;
 }
 
 .manual-metadata-grid {

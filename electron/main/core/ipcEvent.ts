@@ -8,6 +8,7 @@ import os from 'os'
 import { ShowError } from './dialog'
 import { getAsarPath, getStaticPath, getUserDataPath } from '../utils/mainfile'
 import { registerMediaImageCacheIpc } from '../mediaImageCache'
+import { registerTraktIpc } from '../trakt'
 import { createHash } from 'crypto'
 import { getMotrixApplicationRpcPort } from '../aria/runtime'
 import { request as httpsRequest } from 'https'
@@ -227,6 +228,7 @@ export default class ipcEvent {
       })
     }
     registerMediaImageCacheIpc()
+    registerTraktIpc()
     this.handleReedy()
     this.handleMediaAcquisition()
     this.handleDocumentReading()

@@ -22,6 +22,7 @@
           :unified-files="props.unifiedFiles"
           :folder-descending="props.folderDescending"
           @detailVisibilityChange="emit('detailVisibilityChange', $event)"
+          @tagTitleChange="emit('tagTitleChange', $event)"
           :unifiedBrowse="props.unifiedBrowse"
           :browseMode="props.browseMode"
           :localOnly="props.localOnly"
@@ -114,11 +115,11 @@ const props = defineProps<{
   browseSort?: MediaBrowseSort
   browseSelection?: boolean
 }>()
-const emit = defineEmits<{ detailVisibilityChange: [visible: boolean]; browseContextChange: [context: { folderId: string; category: string }] }>()
+const emit = defineEmits<{ tagTitleChange: [title: string]; detailVisibilityChange: [visible: boolean]; browseContextChange: [context: { folderId: string; category: string }] }>()
 
 // 状态
 const showScanProgress = ref(false)
-const activeCategory = ref('home')
+const activeCategory = ref('all')
 const selectedFolder = ref<MediaLibraryFolder>()
 watch([selectedFolder, activeCategory], () => emit('browseContextChange', { folderId: selectedFolder.value?.id || '', category: activeCategory.value }))
 const selectedGenre = ref('')
@@ -454,6 +455,7 @@ const processVideoFileFromApi = async (apiFile: any, folder: MediaLibraryFolder)
 }
 
 const handleCategorySelected = (category: string) => {
+  if (category === 'home') category = 'all'
   homeNavigationActive.value = false
   mediaNav.value?.syncActiveCategory?.(category)
   activeCategory.value = category
@@ -463,6 +465,7 @@ const handleCategorySelected = (category: string) => {
 }
 
 const handleHomeNavigateCategory = (category: string) => {
+  if (category === 'home') category = 'all'
   homeNavigationActive.value = true
   mediaNav.value?.syncActiveCategory?.(category)
   activeCategory.value = category
@@ -546,7 +549,7 @@ const handleCategoryDrillBack = (data: { categoryType: string }) => {
       activeCategory.value = 'ratings'
       break
     default:
-      activeCategory.value = 'home'
+      activeCategory.value = 'all'
       break
   }
 }
@@ -564,8 +567,8 @@ const handleHomeNavigationBack = () => {
   homeNavigationActive.value = false
   selectedFolder.value = undefined
   resetDrillDownFilters()
-  activeCategory.value = 'home'
-  mediaNav.value?.syncActiveCategory?.('home')
+  activeCategory.value = 'all'
+  mediaNav.value?.syncActiveCategory?.('all')
 }
 
 
@@ -662,6 +665,9 @@ onUnmounted(() => {
 
 // 暴露方法给父组件
 defineExpose({
+  resumeMedia: (item: import('../types/media').MediaLibraryItem) => mediaLibrary.value?.resumeMedia(item),
+  returnToTagDetail: () => mediaLibrary.value?.returnToTagDetail() || false,
+  playItems: (items: import('../types/media').MediaLibraryItem[], mode: 'play' | 'loop' | 'shuffle', title: string) => mediaLibrary.value?.playItems(items, mode, title),
   refreshMetadata: () => mediaLibrary.value?.refreshMetadata(),
   posterAction: (item: import('../types/media').MediaLibraryItem, action: import('../utils/mediaPosterMenu').PosterAction) => mediaLibrary.value?.posterAction(item, action),
   folderTitle: computed(() => mediaLibrary.value?.folderTitle || selectedFolder.value?.name || ''),
@@ -722,10 +728,23 @@ defineExpose({
 }
 
 :global(#xbybody .media-library-view .media-library-pane) {
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   transform: none !important;
   contain: none !important;
+}
+
+:global(#xbybody .media-library-view .media-library-pane .media-library),
+:global(#xbybody .media-library-view .media-library-pane .media-detail) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 :global(#xbybody .media-library-view .library-sidebar) {

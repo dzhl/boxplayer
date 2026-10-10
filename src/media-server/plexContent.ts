@@ -309,6 +309,8 @@ const mapPlexItem = (config: MediaServerConfig, item: PlexMetadata): MediaServer
     year: item.year || (item.originallyAvailableAt ? new Date(item.originallyAvailableAt).getFullYear() : undefined),
     genres: (item.Genre || []).map(genre => genre.tag || '').filter(Boolean),
     rating: item.rating || item.audienceRating,
+    tmdbId: Number([item.guid, ...(item.Guid || []).map(entry => entry.id)].find(id => id?.startsWith('tmdb://'))?.split('://')[1]) || undefined,
+    imdbId: [item.guid, ...(item.Guid || []).map(entry => entry.id)].find(id => id?.startsWith('imdb://'))?.split('://')[1],
     runtimeMinutes: toRuntimeMinutes(item.duration),
     progress: toProgress(item),
     parentTitle: item.grandparentTitle || item.parentTitle,

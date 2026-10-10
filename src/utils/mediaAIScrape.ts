@@ -173,7 +173,7 @@ export async function manualAIScrapeItems(item: MediaLibraryItem): Promise<Media
     .map(result => result.mediaItem)
     .filter((mediaItem): mediaItem is MediaLibraryItem => !!mediaItem)
     .map(mediaItem => mediaItem.type === item.type && mediaItem.tmdbId === item.tmdbId && mediaItem.collectionId === item.collectionId
-      ? { ...mediaItem, id: item.id, lastWatched: item.lastWatched, watchProgress: item.watchProgress, lastPlayedFileId: item.lastPlayedFileId, addedAt: item.addedAt }
+      ? { ...mediaItem, id: item.id, lastWatched: item.lastWatched, watchProgress: item.watchProgress, lastPlayedFileId: item.lastPlayedFileId, lastPlayedPositionSeconds: item.lastPlayedPositionSeconds, lastPlayedDurationSeconds: item.lastPlayedDurationSeconds, addedAt: item.addedAt }
       : mediaItem)
 
   if (!scraped.length) {
@@ -276,6 +276,8 @@ function decorateAIScrapeItem(item: MediaLibraryItem, result: MediaAIScrapeResul
     lastWatched: existing.lastWatched,
     watchProgress: existing.watchProgress,
     lastPlayedFileId: existing.lastPlayedFileId,
+    lastPlayedPositionSeconds: existing.lastPlayedPositionSeconds,
+    lastPlayedDurationSeconds: existing.lastPlayedDurationSeconds,
     addedAt: existing.addedAt || item.addedAt
   } : {}
   return {

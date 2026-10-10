@@ -1,4 +1,4 @@
-export interface SeriesMedia { id: string; title: string; serverId?: string }
+export interface SeriesMedia { id: string; title: string; serverId?: string; parentId?: string }
 export interface CustomMediaSeries { id: string; title: string; members: SeriesMedia[] }
 export const CUSTOM_SERIES_KEY = 'MediaLibrary_CustomSeries_v1'
 export function seriesMediaKey(item: SeriesMedia): string { return JSON.stringify([item.serverId || 'local', item.id]) }

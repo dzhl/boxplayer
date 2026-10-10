@@ -61,7 +61,7 @@
           </div>
         </button>
         <template #content>
-          <MediaPosterMenu :server="!!item.serverId && !item.serverId.startsWith('local')" :tv="item.kind === 'series' || item.kind === 'season'" :watched="item.isPlayed" :favorite="item.isFavorite" :disabled="(['select', 'rating', 'refresh', 'playlist', 'continue', ...(!item.serverId || item.serverId.startsWith('local') ? ['delete'] : [])] as PosterAction[])" @action="action => { if (action === 'play') $emit('play', item); else if (action === 'metadata') $emit('metadata', item); else if (action === 'delete' || action === 'loop' || action === 'shuffle' || action === 'watched' || action === 'favorite' || action === 'download' || action === 'series' || action === 'share') $emit('action', item, action) }" />
+          <MediaPosterMenu :server="!!item.serverId && !item.serverId.startsWith('local')" :tv="item.kind === 'series' || item.kind === 'season'" :continuing="item.isContinuing" :watched="item.isPlayed" :favorite="item.isFavorite" :disabled="(['select', 'refresh', 'playlist', ...(item.kind === 'season' ? ['rating'] : []), ...(!item.serverId || item.serverId.startsWith('local') ? ['delete'] : ['continue'])] as PosterAction[])" @action="action => { if (action === 'play') $emit('play', item); else if (action === 'metadata') $emit('metadata', item); else if (action === 'delete' || action === 'loop' || action === 'shuffle' || action === 'watched' || action === 'favorite' || action === 'download' || action === 'series' || action === 'share' || action === 'continue' || action === 'rating') $emit('action', item, action) }" />
         </template>
       </a-trigger>
       <button
@@ -144,7 +144,7 @@ const props = withDefaults(defineProps<{
 defineEmits<{
   (e: 'select', item: MediaServerLibraryNode): void
   (e: 'play', item: MediaServerLibraryNode): void
-  (e: 'action', item: MediaServerLibraryNode, action: 'watched' | 'favorite' | 'download' | 'series' | 'share' | 'loop' | 'shuffle' | 'delete'): void
+  (e: 'action', item: MediaServerLibraryNode, action: 'watched' | 'favorite' | 'download' | 'series' | 'share' | 'loop' | 'shuffle' | 'delete' | 'continue' | 'rating'): void
   (e: 'metadata', item: MediaServerLibraryNode): void
   (e: 'see-all'): void
   (e: 'retry'): void

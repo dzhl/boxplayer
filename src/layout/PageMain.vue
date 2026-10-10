@@ -20,6 +20,7 @@ import { onHideRightMenu, TestAlt, TestCtrl, TestKey, TestShift } from '../utils
 import { copyToClipboard, getFromClipboard, openExternal } from '../utils/electronhelper'
 import { bootstrapMusicLibrary, shutdownMusicLibrary } from '../utils/musicLibraryBootstrap'
 import { bootstrapMediaLibrary, shutdownMediaLibrary } from '../utils/mediaLibraryBootstrap'
+import MediaLibraryLoading from '../components/MediaLibraryLoading.vue'
 import { bootstrapBookLibrary, shutdownBookLibrary } from '../utils/bookLibraryBootstrap'
 import { QRCode as AntQRCode } from 'ant-design-vue'
 import { Modal } from '@arco-design/web-vue'
@@ -45,7 +46,7 @@ const Setting = defineAsyncComponent(() => import('../setting/index.vue'))
 const Rss = defineAsyncComponent(() => import('../rss/index.vue'))
 const Share = defineAsyncComponent(() => import('../share/index.vue'))
 const Down = defineAsyncComponent(() => import('../down/index.vue'))
-const UnifiedMediaLibraryView = defineAsyncComponent(() => import('../views/UnifiedMediaLibraryView.vue'))
+const UnifiedMediaLibraryView = defineAsyncComponent({ loader: () => import('../views/UnifiedMediaLibraryView.vue'), loadingComponent: MediaLibraryLoading, delay: 0 })
 const PageGlobalSearch = defineAsyncComponent(() => import('./PageGlobalSearch.vue'))
 const PageAIWorkspace = defineAsyncComponent(() => import('./PageAIWorkspace.vue'))
 

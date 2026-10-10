@@ -302,6 +302,15 @@ Standalone CLI + MCP server for agent-driven cloud-drive operations. Docs: `clou
 
 Manual trigger only (`workflow_dispatch`) via `.github/workflows/release.yml`. Builds on `windows-latest` + `ubuntu-latest`, publishes draft GitHub Release. No automatic CI on push/PR.
 
+### Release ownership: drafts only
+
+- The human user owns the final publication of every GitHub Release. The agent and CI may prepare commits/tags, build and upload assets, and create/update **draft releases only** when requested.
+- Requests such as “发布 release”, “更新 release”, “重新提交代码更新 release”, or “继续发布” mean prepare/update a draft; they do **not** authorize making it public. The user publishes it manually in GitHub.
+- Never run `gh release edit --draft=false`, create a non-draft release, or enable automatic publication in a workflow or packaging configuration. Keep electron-builder `releaseType` set to `draft` and the workflow's final release update in draft state.
+- Do not delete, recreate, demote, overwrite assets on, or otherwise modify an already-public release without a separate explicit request for that exact operation. A rerun targeting a public tag must stop rather than modify that release.
+- Determine the next version from the latest **public** release plus one patch version, unless the user explicitly specifies a different version. Do not move an existing public tag to new code.
+- Report draft creation and build/test status accurately. Never describe a draft or queued workflow as a published release.
+
 ## Subprojects (gitignored, referenced locally)
 
 `Motrix/`, `koodo-reader/`, `CloudServiceKit/`, `XbyVideoHub/`, `OpenCLI/`, `QuarkPan/`, `PikPakAPI/` — these are local-only and not part of the main repo build.

@@ -158,7 +158,7 @@
         <template v-if="currentRoute.kind === 'home'">
           <div class="home-page">
             <div v-if="content.loadingHome" class="workspace-center-progress">
-              <a-spin size="large" />
+              <MediaLoadingIndicator />
             </div>
 
             <div v-else-if="content.homeError" class="home-error">
@@ -260,7 +260,7 @@
             />
 
             <div v-if="normalizedSearchQuery && content.loadingSearch" class="home-loading search-feedback-card">
-              <a-spin size="large" />
+              <MediaLoadingIndicator />
               <span>{{ t('mediaServer.searchingFor', { query: normalizedSearchQuery }) }}</span>
             </div>
 
@@ -314,7 +314,7 @@
 
             <template v-else>
               <div v-if="content.loadingSearchSuggestions" class="home-loading search-feedback-card">
-                <a-spin size="large" />
+                <MediaLoadingIndicator />
                 <span>{{ t('mediaServer.loadingRecommendations') }}</span>
               </div>
               <div v-else-if="content.searchSuggestionsError" class="home-error search-feedback-card">
@@ -363,7 +363,7 @@
             </div>
 
             <div v-if="showInitialLibraryLoading" class="workspace-center-progress">
-              <a-spin size="large" />
+              <MediaLoadingIndicator />
             </div>
 
             <div v-else-if="currentLibraryError && currentLibraryItems.length === 0" class="home-error">
@@ -433,12 +433,12 @@
                     </div>
                   </template>
                 </div>
-<template #content><MediaPosterMenu v-if="isDetailCandidate(item)" server :tv="item.kind === 'series' || item.kind === 'season'" :watched="item.isPlayed" :favorite="item.isFavorite" :disabled="['rating', 'playlist']" @action="handleServerPosterAction(item, $event)" /></template>
+<template #content><MediaPosterMenu v-if="isDetailCandidate(item)" server :tv="item.kind === 'series' || item.kind === 'season'" :watched="item.isPlayed" :favorite="item.isFavorite" :disabled="item.kind === 'season' ? ['rating', 'playlist'] : ['playlist']" @action="handleServerPosterAction(item, $event)" /></template>
 </a-trigger>
               </div>
               <MediaEmptyFolder v-if="currentLibraryItems.length === 0" class="server-empty-folder" />
               <div v-else-if="(currentRoute.kind === 'library-page' || currentRoute.kind === 'genre-page' || currentRoute.kind === 'studio-page') && currentLibraryPageLoading" class="home-loading collection-loading-inline">
-                <a-spin />
+                <MediaLoadingIndicator />
                 <span>{{ t('mediaServer.loadingMore') }}</span>
               </div>
               <div v-else-if="(currentRoute.kind === 'library-page' || currentRoute.kind === 'genre-page' || currentRoute.kind === 'studio-page') && currentLibraryError" class="home-error inline-home-error">
@@ -473,10 +473,6 @@
                 </button>
               </div>
             </div>
-            <div class="home-intro listing-intro listing-intro-description">
-              <p>这里展示首页卡片对应的完整列表，行为和 macOS 里的“查看全部”一致，并支持滚动分页加载。</p>
-            </div>
-
             <div class="library-shell" :class="listingShellClass">
               <a-trigger v-for="item in currentCollectionItems" :key="item.id" trigger="contextMenu" align-point auto-fit-position>
 <div role="button" tabindex="0"
@@ -533,7 +529,7 @@
                   </div>
                 </template>
               </div>
-<template #content><MediaPosterMenu v-if="isDetailCandidate(item)" server :tv="item.kind === 'series' || item.kind === 'season'" :watched="item.isPlayed" :favorite="item.isFavorite" :disabled="['transcode', 'rating', 'share', 'playlist']" @action="handleServerPosterAction(item, $event)" /></template>
+<template #content><MediaPosterMenu v-if="isDetailCandidate(item)" server :tv="item.kind === 'series' || item.kind === 'season'" :watched="item.isPlayed" :favorite="item.isFavorite" :disabled="item.kind === 'season' ? ['transcode', 'rating', 'share', 'playlist'] : ['transcode', 'share', 'playlist']" @action="handleServerPosterAction(item, $event)" /></template>
 </a-trigger>
             </div>
             <div v-if="currentCollectionError && currentCollectionItems.length === 0" class="home-error inline-home-error">
@@ -542,7 +538,7 @@
             </div>
             <MediaEmptyFolder v-else-if="currentCollectionItems.length === 0 && !currentCollectionLoading" class="server-empty-folder" />
             <div v-else-if="currentCollectionLoading" class="home-loading collection-loading-inline">
-              <a-spin />
+              <MediaLoadingIndicator />
               <span>{{ t('mediaServer.loadingMore') }}</span>
             </div>
             <div v-else-if="currentCollectionError" class="home-error inline-home-error">
@@ -556,9 +552,7 @@
         <template v-else-if="currentRoute.kind === 'item-detail' || currentRoute.kind === 'person-page'">
           <div class="detail-page">
             <div v-if="showDetailLoadingState" class="detail-loading-state">
-              <div class="detail-loading-indicator">
-                <a-spin size="large" />
-              </div>
+              <MediaLoadingIndicator />
             </div>
 
             <div v-else-if="showDetailErrorState" class="home-error">
@@ -828,7 +822,8 @@
 
                         <div class="detail-actions-column">
                           <div class="detail-play-row">
-                            <button class="detail-primary-play" @click="handleDetailPlay">
+                            <button class="detail-primary-play" :class="{ 'has-resume': detailPlayResume }" @click="handleDetailPlay">
+                              <span v-if="detailPlayResume" class="detail-play-progress" aria-hidden="true" :style="{ width: `${detailPlayResume.percent}%` }"></span>
                               <span class="detail-play-label">{{ detailPlayLabel }}</span>
                             </button>
                             <a-trigger
@@ -949,10 +944,6 @@
                     v-if="detailSeasonMenu.length > 0 || detailEpisodeItems.length > 0"
                     class="detail-section detail-section-episodes"
                   >
-                    <div class="detail-section-header">
-                      <h4>{{ detailSeasonTitle }}</h4>
-                    </div>
-
                     <div v-if="detailSeasonMenu.length > 1" class="detail-season-picker">
                       <button
                         v-for="season in detailSeasonMenu"
@@ -966,12 +957,16 @@
                     </div>
 
                     <div class="detail-episodes-rail">
-                      <button
+                      <div
                         v-for="(episode, episodeIndex) in detailEpisodeItems"
                         :key="episode.id"
                         class="detail-episode-card"
                         :class="{ selected: selectedEpisodeId === episode.id }"
+                        role="button"
+                        tabindex="0"
                         @click="selectDetailEpisode(episode.id)"
+                        @keydown.enter.self="selectDetailEpisode(episode.id)"
+                        @keydown.space.self.prevent="selectDetailEpisode(episode.id)"
                       >
                         <div class="detail-episode-cover media-image-frame" :class="{ 'has-image': !!pickDetailEpisodeCardImage(episode) }">
                           <img
@@ -982,6 +977,9 @@
                             @error="handleCardImageError"
                           />
                           <WatchedIndicator corner :watched="episode.isPlayed === true" /><div class="media-card-placeholder media-image-placeholder"><MediaPosterPlaceholder /></div>
+                          <button type="button" class="detail-episode-play-overlay" :aria-label="`播放 ${episode.title}`" @click.stop="playHomeMediaItem(episode)">
+                            <Play :size="20" fill="currentColor" aria-hidden="true" />
+                          </button>
                           <div v-if="selectedEpisodeId === episode.id" class="detail-episode-selected-badge">
                             <span>✓</span>
                           </div>
@@ -994,7 +992,7 @@
                           <span class="detail-episode-kicker">{{ detailEpisodeLocator(episode) }}</span>
                           <span class="detail-episode-title">{{ detailEpisodeTitle(episode) }}</span>
                         </div>
-                      </button>
+                      </div>
                     </div>
 
                   </section>
@@ -1260,7 +1258,7 @@
               <div class="server-icon-set-column">
                 <div class="server-icon-column-heading">{{ t('mediaServer.iconSets') }}</div>
                 <div v-if="serverIconSetsLoading" class="server-icon-empty">
-                  <a-spin size="small" />
+                  <MediaLoadingIndicator :size="24" />
                   <span>{{ t('mediaServer.loadingIconSets') }}</span>
                 </div>
                 <div v-else-if="filteredServerIconSets.length === 0" class="server-icon-empty">
@@ -1372,12 +1370,15 @@
 
 <script setup lang="ts">
 import MediaPosterPlaceholder from '../components/MediaPosterPlaceholder.vue'
+import MediaLoadingIndicator from '../components/MediaLoadingIndicator.vue'
 import MediaPosterMenu from '../components/MediaPosterMenu.vue'
 import type { PosterAction } from '../utils/mediaPosterMenu'
 import { openCustomSeries } from '../utils/customMediaSeries'
+import { detailResumeState } from '../utils/detailResume'
 import MediaEmptyFolder from '../components/MediaEmptyFolder.vue'
-import { Folder } from 'lucide-vue-next'
+import { Folder, Play } from 'lucide-vue-next'
 import { openMediaShare } from '../utils/mediaShare'
+import { openServerPersonalRating } from '../utils/mediaPersonalRating'
 import WatchedIndicator from '../components/WatchedIndicator.vue'
 import { compareMediaServerItems, type MediaServerBrowseSort, type MediaServerSortDirection } from '../utils/mediaServerBrowseSort'
 const props = defineProps<{ unifiedRoot?: boolean; rootSelection?: boolean; unifiedBrowse?: boolean; browseMode?: 'grid' | 'list'; serverSort?: MediaServerBrowseSort; serverSortDirection?: MediaServerSortDirection; serverSortSeed?: number }>()
@@ -2080,7 +2081,13 @@ const selectSourceOption = (sourceId: string) => {
 const detailIsWatched = computed(() => detailDisplayedItem.value.isPlayed === true)
 const detailIsFavorite = computed(() => detailDisplayedItem.value.isFavorite === true)
 
+const detailPlayResume = computed(() => detailResumeState(
+  (detailDisplayedItem.value.playbackPositionTicks || 0) / 10_000_000,
+  detailDisplayedItem.value.progress === undefined ? (detailDisplayedItem.value.runtimeMinutes || 0) * 60 : undefined,
+  detailDisplayedItem.value.progress
+))
 const detailPlayLabel = computed(() => {
+  if (detailPlayResume.value) return detailPlayResume.value.label
   const match = detailDisplayedItem.value.title.match(/S(\d+)E(\d+)/i)
   if (match) return `S${match[1]} • E${match[2]}`
   if (detailDisplayedItem.value.kind === 'episode') return '继续播放'
@@ -2569,7 +2576,7 @@ const loadCurrentLibrary = async (force = false) => {
   }
 }
 
-const isDetailCandidate = (item: MediaServerLibraryNode) => ['movie', 'series', 'season', 'episode'].includes(item.kind)
+const isDetailCandidate = (item: MediaServerLibraryNode) => ['movie', 'series', 'season', 'episode', 'person'].includes(item.kind)
 const handleCardClick = (item: MediaServerCardItem) => {
   handleLibraryItemClick(item.id, item.title, item as MediaServerLibraryNode)
 }
@@ -2875,6 +2882,13 @@ const playHomeMediaItem = async (item: MediaServerCardItem | MediaServerLibraryN
 
 const serverDeletePending = new Set<string>()
 const handleServerPosterAction = async (item: MediaServerCardItem | MediaServerLibraryNode, action: PosterAction) => {
+ if (action === 'rating') {
+  const server = registry.servers.find(server => server.id === item.serverId)
+  if (!server) return
+  try { openServerPersonalRating(await content.loadItemDetail(server, item.id)) }
+  catch (error) { message.error(error instanceof Error ? error.message : String(error)) }
+  return
+ }
  if (action === 'delete') {
   const server = ('serverId' in item && item.serverId ? registry.servers.find(server => server.id === item.serverId) : registry.currentServer)
   if (!server || !item.id) return
@@ -2906,7 +2920,9 @@ const handleServerPosterAction = async (item: MediaServerCardItem | MediaServerL
  if (action === 'watched' || action === 'favorite' || action === 'download') await handleHomeMediaAction(item, action)
 }
 const watchedPending = ref(new Set<string>())
-const handleHomeMediaAction = async (item: MediaServerCardItem | MediaServerLibraryNode, action: 'watched' | 'favorite' | 'download' | 'series' | 'share' | 'loop' | 'shuffle' | 'delete') => {
+const handleHomeMediaAction = async (item: MediaServerCardItem | MediaServerLibraryNode, action: 'watched' | 'favorite' | 'download' | 'series' | 'share' | 'loop' | 'shuffle' | 'delete' | 'continue' | 'rating') => {
+  if (action === 'rating') { await handleServerPosterAction(item, action); return }
+  if (action === 'continue') return // Local-only action; server resume lists are managed by the provider.
   const server = ('serverId' in item && item.serverId ? registry.servers.find(server => server.id === item.serverId) : registry.currentServer)
   if (!server || !item.id) return
   if (action === 'delete') { await handleServerPosterAction(item, action); return }
@@ -3356,7 +3372,7 @@ const handleLibraryItemClick = (itemId: string, title: string, item?: MediaServe
     navigation.push({ kind: 'item-detail', itemId, title })
     return
   }
-  navigation.push({ kind: 'library-page', libraryId: itemId, title })
+  navigation.push({ kind: 'library-page', libraryId: ['BoxSet', 'Playlist'].includes(item?.rawType || '') ? `server-container:${itemId}` : itemId, title })
 }
 
 const handleSearchItemSelect = (item: MediaServerLibraryNode) => {
@@ -6710,6 +6726,37 @@ onUnmounted(() => {
   display: block;
 }
 
+.detail-episode-play-overlay {
+  position: absolute;
+  z-index: 2;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.48);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  opacity: 0.94;
+  cursor: pointer;
+}
+
+.detail-episode-play-overlay:hover,
+.detail-episode-play-overlay:focus-visible {
+  background: rgba(0, 0, 0, 0.72);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.detail-episode-play-overlay svg {
+  margin-left: 2px;
+}
+
 .detail-episode-selected-badge {
   position: absolute;
   top: 8px;
@@ -8819,6 +8866,10 @@ body[arco-theme='dark'] #xbybody .media-server-workspace .media-image-placeholde
   opacity: 0.72 !important;
 }
 
+body[arco-theme='dark'] #xbybody .media-server-workspace .media-image-placeholder:has(> .media-poster-placeholder-icon) {
+  background: #232625 !important;
+}
+
 /* ── popup/dropdown glass background ── */
 #xbybody .arco-select-popup-container .arco-select-popup-inner,
 #xbybody .arco-trigger-popup-wrapper .arco-dropdown-list,
@@ -8859,7 +8910,7 @@ body[arco-theme='dark'] #xbybody .arco-trigger-popup {
 }
 
 #xbybody .media-server-workspace .detail-backdrop-stage {
-  min-height: max(clamp(620px, 68vh, 940px), calc(30vw + 54px)) !important;
+  min-height: max(620px, calc(100vh - 140px)) !important;
   overflow: hidden !important;
   background: #242424 !important;
 }
@@ -9063,6 +9114,22 @@ body:not([arco-theme='dark']) #xbybody .media-server-workspace .detail-backdrop-
   color: #111 !important;
   background: rgba(255, 255, 255, 0.9) !important;
   box-shadow: none !important;
+}
+
+#xbybody .media-server-workspace .detail-primary-play.has-resume {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  color: #fff !important;
+  background: rgba(150, 157, 160, 0.5) !important;
+}
+#xbybody .media-server-workspace .detail-primary-play > .detail-play-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 0;
+  background: rgba(235, 239, 240, 0.42);
+  border-right: 1px solid rgba(255, 255, 255, 0.3);
+  pointer-events: none;
 }
 
 #xbybody .media-server-workspace .detail-play-version-trigger {

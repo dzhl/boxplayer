@@ -3352,6 +3352,7 @@ const getSubTitleList = async (art: Artplayer, autoLoad = true) => {
 
 const updateVideoTime = async (positionSeconds = ArtPlayerRef?.currentTime || 0, durationSeconds = ArtPlayerRef?.duration || 0) => {
   if (pageVideo.drive_id === 'media_server') return
+  updateContinueWatching(positionSeconds, durationSeconds)
   if (isQuarkUser(pageVideo.user_id) || pageVideo.drive_id === 'quark') return
   await AliFile.ApiUpdateVideoTime(
     pageVideo.user_id,
@@ -3359,7 +3360,6 @@ const updateVideoTime = async (positionSeconds = ArtPlayerRef?.currentTime || 0,
     pageVideo.file_id,
     positionSeconds
   )
-  updateContinueWatching(positionSeconds, durationSeconds)
 }
 
 let lastVideoProgressSaveSecond = -1
@@ -3410,6 +3410,9 @@ const updateContinueWatching = (positionSeconds = ArtPlayerRef?.currentTime || 0
   const duration = durationSeconds || 0
   const progress = duration > 0 ? positionSeconds / duration : 0
   item.watchProgress = Math.max(0, Math.min(1, progress))
+  item.lastPlayedFileId = fileId
+  item.lastPlayedPositionSeconds = positionSeconds
+  item.lastPlayedDurationSeconds = duration
   item.lastWatched = new Date()
   mediaStore.addToContinueWatching(item)
 }

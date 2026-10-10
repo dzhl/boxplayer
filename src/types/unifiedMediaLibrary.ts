@@ -5,8 +5,10 @@ export interface UnifiedLibraryCard {
   sortValues?: { title: string; fileName?: string; addedAt?: string | number | Date; premiereDate?: string }
   image?: string
   subtitle?: string
+  /** Playback progress as a percentage from 0 to 100. */
   progress?: number
-  posterMenu?: { server: boolean; tv: boolean; watched: boolean; favorite?: boolean; disabled: PosterAction[]; action: (action: PosterAction) => void }
+  contextMenu?: (event: MouseEvent) => void
+  posterMenu?: { server: boolean; tv: boolean; watched: boolean; favorite?: boolean; continuing?: boolean; disabled: PosterAction[]; action: (action: PosterAction) => void }
   action: () => void
 }
 
@@ -15,5 +17,6 @@ export interface UnifiedLibraryRow {
   title: string
   cards: UnifiedLibraryCard[]
   landscape?: boolean
+  grouped?: boolean
   more: () => void
 }

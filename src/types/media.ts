@@ -11,6 +11,9 @@ export interface MediaLibraryItem {
   year?: string
   releaseDate?: string
   rating?: number
+  certification?: string
+  mediaSubtype?: 'movie' | 'concert' | 'short'
+  isMiniseries?: boolean
   genres: string[]
   productionCountries?: string[]
   overview?: string
@@ -30,6 +33,8 @@ export interface MediaLibraryItem {
   lastWatched?: Date
   watchProgress?: number
   lastPlayedFileId?: string
+  lastPlayedPositionSeconds?: number
+  lastPlayedDurationSeconds?: number
   collectionId?: number
   collectionName?: string
   collectionMovies?: MediaCollectionMovie[]

@@ -5,6 +5,7 @@ export interface HomeManagementItem {
   sourceTitle?: string
   available: boolean
   child?: boolean
+  optIn?: boolean
 }
 
 export interface HomeManagementNode {
@@ -28,9 +29,12 @@ export interface UnifiedHomeSettings {
 
 export const defaultHomeSettings = (): UnifiedHomeSettings => ({ order: [], hidden: [], titles: {} })
 
-export const FIXED_HOME_MENU_IDS = ['recent', 'local:unwatched', 'local:daily', 'local:movies', 'local:genres', 'local:top-rated', 'local:tv', 'local:unmatched', 'music']
+export const FIXED_HOME_MENU_IDS = ['recent', 'local:unwatched', 'local:daily', 'local:movies', 'local:genres', 'local:tv', 'local:unmatched', 'music']
 
 export function withFixedHomeMenus(items: HomeManagementItem[]) {
+  // A fixed entry and its content row can describe the same destination.
+  // Keep one identity for the sidebar, management list and home layout.
+  items = [...new Map(items.filter(item => item.id !== 'local:favorites').map(item => [item.id, item])).values()]
   const fixed = new Set(FIXED_HOME_MENU_IDS)
   return [
     ...FIXED_HOME_MENU_IDS.flatMap(id => items.filter(item => item.id === id).map(item => ({ ...item, available: true }))),
@@ -45,7 +49,7 @@ export function orderedHomeItems(items: HomeManagementItem[], settings: UnifiedH
 }
 
 export function visibleHomeItems(items: HomeManagementItem[], settings: UnifiedHomeSettings) {
-  return orderedHomeItems(items, settings).filter(item => item.available && !item.child && !settings.hidden.includes(item.id))
+  return orderedHomeItems(items, settings).filter(item => item.available && (!item.child || item.id.includes(':group:')) && (!item.optIn && !item.child || settings.order.includes(item.id)) && !settings.hidden.includes(item.id))
 }
 
 // The sidebar keeps its fixed menus first; the home content starts with source shortcuts.
@@ -56,7 +60,7 @@ export function visibleHomeSections(items: HomeManagementItem[], settings: Unifi
 }
 
 export function mergeHomeOrder(order: string[], items: HomeManagementItem[]) {
-  return [...new Set([...order, ...items.map(item => item.id)])]
+  return [...new Set([...order, ...items.filter(item => !item.optIn && !item.child).map(item => item.id)])]
 }
 
 export function moveHomeItem(settings: UnifiedHomeSettings, visibleIds: string[], id: string, destination: string): UnifiedHomeSettings {

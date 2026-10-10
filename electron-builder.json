@@ -4,7 +4,7 @@
   "protocols": [
     {
       "name": "xbyboxplayer OAuth",
-      "schemes": ["xbyboxplayer-oauth", "boxplayer-onedriveoauth"]
+      "schemes": ["xbyboxplayer-oauth", "boxplayer-onedriveoauth", "boxplayer-traktoauth"]
     }
   ],
   "copyright": "copyright ©2026 GaoZhangMin",
@@ -101,7 +101,7 @@
       "owner": "gaozhangmin",
       "repo": "boxplayer",
       "provider": "github",
-      "releaseType": "prerelease"
+      "releaseType": "draft"
     }
   ]
 }

@@ -17,7 +17,26 @@ const items: HomeManagementItem[] = [
   { id: 'local:movies:group:test', title: '子分类', sourceId: 'local', available: true, child: true }
 ]
 
+it('deduplicates series and keeps shortcut favorites separate from favorite media', () => {
+  const series = { id: 'custom-series', title: '系列', sourceId: 'local', available: true }
+  const shortcuts = { ...series, id: 'sources', title: '收藏夹' }
+  const menus = withFixedHomeMenus([series, shortcuts, series, { ...shortcuts, id: 'local:favorites' }])
+  const settings = { ...defaultHomeSettings(), order: ['custom-series', 'custom-series', 'sources', 'local:favorites'] }
+  expect(menus.map(item => item.id)).toEqual(['custom-series', 'sources'])
+  expect(visibleHomeItems(menus, settings).map(item => item.id)).toEqual(['custom-series', 'sources'])
+  expect(visibleHomeSections(menus, settings)).toHaveLength(2)
+})
+
 describe('unified home management settings', () => {
+  it('enables catalog categories and leaf groups only when explicitly selected', () => {
+    const catalog: HomeManagementItem[] = [
+      { id: 'catalog:tv/recent', title: 'Recent TV', sourceId: 'local', available: true, optIn: true },
+      items[4]
+    ]
+    expect(visibleHomeItems(catalog, defaultHomeSettings())).toEqual([])
+    expect(mergeHomeOrder([], catalog)).toEqual([])
+    expect(visibleHomeItems(catalog, { ...defaultHomeSettings(), order: catalog.map(item => item.id) })).toEqual(catalog)
+  })
   it('shows music without tracks and still allows hiding it', () => {
     const menus = withFixedHomeMenus([{ id: 'music', title: '音乐', sourceId: 'local', available: false }])
     expect(visibleHomeItems(menus, defaultHomeSettings()).map(item => item.id)).toEqual(['music'])
@@ -72,7 +91,7 @@ describe('unified home management settings', () => {
   })
 
   it('merges late-loading server libraries without discarding prior edits', () => {
-    expect(mergeHomeOrder(['b:42', 'offline:42'], items)).toEqual(['b:42', 'offline:42', 'sources', 'a:42', 'a:next', 'local:movies:group:test'])
+    expect(mergeHomeOrder(['b:42', 'offline:42'], items)).toEqual(['b:42', 'offline:42', 'sources', 'a:42', 'a:next'])
   })
 
   it('persists order, visibility and aliases, and resets only ordering and visibility', () => {
@@ -158,7 +177,7 @@ it('opens sorting first, then editing shows every server, including unavailable/
   const rowCount = flatten(root).filter(item => item.props.class === 'management-row').length
   toggles[0].props.onClick()
   await nextTick()
-  expect(flatten(root).filter(item => item.props.class === 'management-row')).toHaveLength(rowCount)
+  expect(flatten(root).filter(item => item.props.class === 'management-row')).toHaveLength(rowCount - 1)
   toggles.at(-1)!.props.onClick()
   await nextTick()
   flatten(root).find(item => item.type === 'button' && String(item.props.class).includes('confirm'))!.props.onClick()

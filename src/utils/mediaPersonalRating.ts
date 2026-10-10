@@ -9,3 +9,6 @@ export function savePersonalRating(id: string, rating: number): void {
   localStorage.setItem(PERSONAL_RATING_KEY, JSON.stringify({ ...readPersonalRatings(), [id]: rating }))
 }
 export function openPersonalRating(item: { id: string; name: string }): void { window.dispatchEvent(new CustomEvent('boxplayer:personal-rating', { detail: item })) }
+export function openServerPersonalRating(item: import('../types/mediaServerContent').MediaServerCardItem): void {
+  openPersonalRating({ ...item, id: `${item.serverId}:${item.id}`, name: item.title, type: item.kind === 'movie' ? 'movie' : item.kind === 'series' ? 'tv' : item.kind === 'episode' ? 'episode' : undefined } as { id: string; name: string })
+}

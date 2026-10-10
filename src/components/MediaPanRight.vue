@@ -144,6 +144,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { t } from '../i18n'
 import { localWatchedKey, localWatchedKeys } from '../utils/localWatchedState'
+import { isContinueWatchingMember } from '../utils/continueWatchingAction'
 import DB from '../utils/db'
 import { Play, RefreshCw, Shuffle, Star, SquareCheck, Share2, Download, Pencil, Eye, Bookmark, ListPlus, Library, Trash2 } from 'lucide-vue-next'
 import LocalMediaFileCard from './LocalMediaFileCard.vue'
@@ -171,13 +172,19 @@ const fileMenuActions = computed<Array<{ id: string; icon: typeof Play; label: P
   { id: 'play', icon: Play, label: 'unified.play' }, { id: 'loop', icon: RefreshCw, label: 'unified.loopPlay' }, { id: 'select', icon: SquareCheck, label: 'unified.selectItems' }, { id: 'rating', icon: Star, label: 'media.rating' },
   { id: 'share', icon: Share2, label: 'fileContext.share' }, { id: 'download', icon: Download, label: 'fileContext.download', disabled: true },
   { id: 'metadata', icon: Pencil, label: 'fileContext.editMetadata' }, { id: 'watched', icon: Eye, label: localFileWatched(menuFile.value!) ? 'mediaServer.markUnwatched' : 'mediaServer.markWatched' },
-  { id: 'continue', icon: Bookmark, label: 'fileContext.continue' }, { id: 'playlist', icon: ListPlus, label: 'media.playlist' }, { id: 'series', icon: Library, label: 'fileContext.series' }, { id: 'delete', icon: Trash2, label: 'common.delete', disabled: true }
+  { id: 'continue', icon: Bookmark, label: fileInContinueWatching.value ? 'fileContext.removeContinue' : 'fileContext.continue' }, { id: 'playlist', icon: ListPlus, label: 'media.playlist' }, { id: 'series', icon: Library, label: 'fileContext.series' }, { id: 'delete', icon: Trash2, label: 'common.delete', disabled: true }
 ])
 const runFileAction = (action: string) => { const file = menuFile.value; menuFile.value = undefined; if (!file) return; if (action === 'select') handleSelect(file.file_id, {} as MouseEvent, true); else if (action === 'watched') toggleLocalFileWatched(file); else emit('fileAction', action, file) }
 const viewlist = ref()
 const mediaPanFileStore = useMediaPanFileStore()
 const props = defineProps<{ unifiedFiles?: boolean; browseMode?: 'grid' | 'list'; browseSelection?: boolean; descending?: boolean }>()
 const library = useMediaLibraryStore()
+const fileInContinueWatching = computed(() => {
+  const file = menuFile.value
+  if (!file) return false
+  const target = library.mediaItems.find(item => [...(item.driveFiles || []), ...(item.seasons || []).flatMap(season => (season.episodes || []).flatMap(episode => episode.driveFiles || []))].some(candidate => candidate.id === file.file_id || candidate.path === file.file_id))
+  return !!target && library.continueWatching.some(entry => isContinueWatchingMember(entry, target))
+})
 const localFileMediaId = (file: IAliGetFileModel) => library.mediaItems.find(item => [...(item.driveFiles || []), ...(item.seasons || []).flatMap(season => (season.episodes || []).flatMap(episode => episode.driveFiles || []))].some(candidate => candidate.driveId === 'local' && (candidate.path === file.file_id || candidate.id === file.file_id)))?.id || 'local-file:' + file.file_id
 const localFileWatched = (file: IAliGetFileModel) => library.isWatched(localFileMediaId(file)) || library.isWatched(localWatchedKey(file.file_id))
 const toggleLocalFileWatched = async (file: IAliGetFileModel) => {

@@ -86,9 +86,9 @@ describe('unified media library navigation', () => {
     expect(source).toContain('@open-server="useManagedServer"')
   })
 
-  it('keeps the eight-column grid and image fallback isolated to library cards', () => {
+  it('keeps consistent poster widths and image fallback isolated to library cards', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/components/UnifiedMediaRow.vue'), 'utf8')
-    expect(source).toContain('repeat(8, minmax(0, 1fr))')
+    expect(source).toContain('repeat(auto-fill, 110px)')
     expect(source).toContain('.mode-list .media-card')
     expect(source).toContain('failedImages.has(card.image)')
     expect(source).toContain('button:focus-visible')

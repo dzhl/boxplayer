@@ -1,8 +1,38 @@
 <script setup lang="ts">
-import { Film } from 'lucide-vue-next'
+import filmIcon from '../assets/media/poster-placeholder-film.svg?raw'
+import { BookOpen, Music } from 'lucide-vue-next'
+withDefaults(defineProps<{ kind?: 'film' | 'music' | 'book' }>(), { kind: 'film' })
 </script>
-<template><Film class="media-poster-placeholder-icon" :stroke-width="2" aria-hidden="true" /></template>
+<!-- Trusted bundled SVG, not remote or user-provided markup. A non-img root
+     keeps broken-poster img hiding rules from hiding the fallback too. -->
+<template>
+  <span v-if="kind === 'film'" class="media-poster-placeholder-icon" aria-hidden="true" v-html="filmIcon" />
+  <span v-else class="media-poster-placeholder-icon media-category-placeholder" aria-hidden="true"><Music v-if="kind === 'music'" /><BookOpen v-else /></span>
+</template>
 <style>
-.media-poster-placeholder-icon { width: 36%; max-width: 80px; height: auto; aspect-ratio: 1; color: #ff8700; flex-shrink: 0; }
+.media-poster-placeholder-icon {
+  position: static !important;
+  inset: auto !important;
+  display: block;
+  width: 34.5% !important;
+  height: auto !important;
+  aspect-ratio: 120 / 88;
+  object-fit: contain !important;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.media-poster-placeholder-icon > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.media-category-placeholder { aspect-ratio: 1; color: #ff8000; }
+.poster-placeholder:has(> .media-poster-placeholder-icon),
+.media-card-placeholder:has(> .media-poster-placeholder-icon),
+.thumbnail-placeholder:has(> .media-poster-placeholder-icon),
+.artwork:has(> .media-poster-placeholder-icon),
+.local-file-art:has(> .media-poster-placeholder-icon) {
+  background: #232625 !important;
+}
 .media-card-placeholder:has(> .media-poster-placeholder-icon)::before { display: none !important; }
 </style>

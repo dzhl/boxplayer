@@ -53,7 +53,7 @@ describe('unified category browsing', () => {
     expect(view).toContain('@contextmenu.prevent="openSourceMenu($event, card.key)"')
     expect(view).toContain("{ id: 'endpoint', icon: RefreshCw }")
     expect(view).toContain("{ id: 'removeFavoriteFolder', icon: Star }")
-    expect(view).toContain('registryView.value?.deleteServer(key.slice(7))')
+    expect(view).toContain('addRegistryView.value?.deleteServer(key.slice(7))')
     expect(view).toContain('videoView.value?.playFolder(folder.id')
     expect(view).toContain("source-context-menu button')?.focus()")
     const library = readFileSync(resolve(process.cwd(), 'src/components/MediaLibrary.vue'), 'utf8')
@@ -92,7 +92,10 @@ describe('unified category browsing', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/UnifiedMediaLibraryView.vue'), 'utf8')
     expect(source).toContain('v-if="!detailPageVisible && !isLibrarySettingsPage" class="unified-toolbar"')
     expect(source).toContain(`v-else-if="!['home', 'music', 'book'].includes(section) && !isLibrarySettingsPage" trigger="click" position="br"`)
-    expect(source.match(/class="unified-action-option(?: server-root-option)?"/g)).toHaveLength(20)
+    const options = [...source.matchAll(/<a-doption\b[^>]*class="unified-action-option(?: server-root-option)?"[^>]*>(.*?)<\/a-doption>/gs)]
+    expect(options.length).toBe(source.match(/class="unified-action-option(?: server-root-option)?"/g)?.length)
+    expect(options.length).toBeGreaterThan(0)
+    for (const option of options) expect(option[1]).toContain('<template #icon>')
     expect(source).toContain('<template #icon><ListFilter :size="14" /></template>')
     expect(source).toContain('min-width:190px')
   })
@@ -107,8 +110,8 @@ describe('unified category browsing', () => {
   })
   it('opens user favorite media instead of home shortcut cards', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/UnifiedMediaLibraryView.vue'), 'utf8')
-    expect(source).toContain("if (id === 'sources') { void showCategory('favorites'); return }")
-    expect(source).toContain("if (id === 'sources') return selectedCategory.value === 'favorites'")
+    expect(source).toContain("if (id === 'sources') { showCatalog('favorites'); return }")
+    expect(source).toContain("if (id === 'sources') return isCatalogPage.value && selectedHomeRowKey.value === 'catalog:favorites'")
   })
   it('shows only the home collection title for server categories', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/UnifiedMediaLibraryView.vue'), 'utf8')
@@ -134,7 +137,7 @@ describe('unified category browsing', () => {
     expect(source).toContain('!homePreferences.hidden.includes(card.key)')
     expect(source).toContain('@click="source.action"')
     expect(source).toContain('grid-template-columns:repeat(8,minmax(0,1fr))')
-    expect(source).toContain("action: () => showHomeRow('library-shortcuts')")
+    expect(source).toContain("{ key: 'library', title: t('media.library'), icon: GalleryVerticalEnd, action: () => showCatalog() }")
     expect(source).toContain('v-for="card in libraryShortcutCards"')
     expect(source).toContain("selectedHomeRowKey === 'library-index'")
   })
@@ -221,9 +224,9 @@ describe('watched controls across posters', () => {
 describe('poster menu variants', () => {
  it('keeps the four reference orders distinct', async () => {
  const { mediaPosterActions } = await import('../mediaPosterMenu');
- expect(mediaPosterActions(true,true)).toEqual(['play','loop','shuffle','favorite','refresh','watched','playlist','delete']);
+ expect(mediaPosterActions(true,true)).toEqual(['play','loop','shuffle','rating','favorite','refresh','watched','playlist','delete']);
  expect(mediaPosterActions(true,false)).toEqual(['play','loop','rating','share','download','refresh','watched','favorite','playlist','delete']);
- expect(mediaPosterActions(false,true)).toEqual(['play','loop','shuffle','select','watched','playlist','series','delete']);
+ expect(mediaPosterActions(false,true)).toEqual(['play','loop','shuffle','select','rating','watched','continue','playlist','series','delete']);
  expect(mediaPosterActions(false,false)).toEqual(['play','loop','select','rating','share','download','metadata','watched','continue','playlist','series','delete']);
  });
  it('compiles the shared menu', () => { const path='src/components/MediaPosterMenu.vue'; const {descriptor}=parse(readFileSync(resolve(process.cwd(),path),'utf8')); const script=compileScript(descriptor,{id:path}); expect(compileTemplate({source:descriptor.template!.content,filename:path,id:path,compilerOptions:{bindingMetadata:script.bindings}}).errors).toEqual([]) });
