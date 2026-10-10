@@ -610,7 +610,10 @@ const rawRows = computed<Row[]>(() => {
     }
     result.push({ key: `${server.id}:next`, title: `${t('unified.nextUp')} · ${server.name}`, cards: data.nextUp.map(item => serverCard(item)), more: () => showServer(server.id, { kind: 'collection-page', collectionId: 'home:nextup', title: t('unified.nextUp') }) })
     for (const library of data.libraries) {
-      result.push({ key: `${server.id}:${library.id}`, title: `${t('media.recentlyAdded')} ${library.title} · ${server.name}`, cards: library.items.map(item => serverCard(item)), more: () => showServer(server.id, { kind: 'library-page', libraryId: library.id, title: library.title }) })
+      const sectionKey = `${server.id}:library:${library.id}`
+      const loading = !!content.homeLibrarySectionLoading[sectionKey] || (refreshing.value && !library.attempted)
+      const error = content.homeSectionError[sectionKey]
+      result.push({ key: `${server.id}:${library.id}`, loading, error, title: `${t('media.recentlyAdded')} ${library.title} · ${server.name}`, cards: library.items.map(item => serverCard(item)), more: () => showServer(server.id, { kind: 'library-page', libraryId: library.id, title: library.title }) })
     }
     if (!data.libraries.length) result.push({ key: `${server.id}:latest`, title: `${t('media.recentlyAdded')} · ${server.name}`, cards: data.latest.map(item => serverCard(item)), more: () => showServer(server.id, { kind: 'home' }) })
   }
@@ -759,7 +762,7 @@ const homeLayout = computed(() => visibleHomeSections(homeItems.value, homePrefe
 const rows = computed<Row[]>(() => {
   const result = rawRows.value.filter(row => !homePreferences.hidden.some(key => key.startsWith('source:server:') && row.key.startsWith(key.slice('source:server:'.length) + ':')) && (row.key === 'resume' || visibleHomeMenu.value.some(item => item.id === row.key))).map(row => ({ ...row, cards: row.cards.filter(card => { if (!card.key.startsWith('local:')) return !homePreferences.hidden.some(key => key.startsWith('source:server:') && card.key.startsWith(key.slice('source:server:'.length) + ':')); const item = media.mediaItems.find(item => 'local:' + item.id === card.key); return !item?.folderId || !homePreferences.hidden.includes('source:folder:' + item.folderId) }), title: visibleHomeMenu.value.find(item => item.id === row.key)?.title || row.title }))
   const keyword = query.value.trim().toLocaleLowerCase()
-  return keyword ? result.map(row => ({ ...row, cards: row.cards.filter(card => card.title.toLocaleLowerCase().includes(keyword)) })).filter(row => row.cards.length) : result
+  return keyword ? result.map(row => ({ ...row, cards: row.cards.filter(card => card.title.toLocaleLowerCase().includes(keyword)) })).filter(row => row.cards.length) : result.filter(row => row.cards.length || row.loading || row.error)
 })
 const selectedHomeRow = computed(() => {
  if (selectedHomeRowKey.value.startsWith('custom-series:')) return { key: selectedHomeRowKey.value, title: customSeriesGroups.value.find(group => group.id === selectedHomeRowKey.value.slice('custom-series:'.length))?.title || t('unified.series'), cards: customSeriesCards.value, more: () => {} }
@@ -827,8 +830,10 @@ async function refresh(force = true) {
   try {
     syncPlayback()
     if (force) await media.hydrate()
-    await Promise.all([music.loadFromDB(), books.loadFromDB(), loadLibraryRecommendations()])
-    await Promise.all(registry.servers.map(async server => {
+    await Promise.allSettled([
+      music.loadFromDB(), books.loadFromDB(), loadLibraryRecommendations(),
+      loadBounded(registry.servers, 2, async server => {
+      if (disposed) return
       const config = { ...server, baseUrl: server.backupAddresses?.[server.selectedLineName || ''] || server.baseUrl }
       try {
         await content.loadHomeShell(config, force)
@@ -839,9 +844,9 @@ async function refresh(force = true) {
         ])
         // Limit each server to three concurrent library requests.
         const libraries = content.currentHomeData(server.id).libraries
-        for (let offset = 0; offset < libraries.length && !disposed; offset += 3) {
-          outcomes.push(...await Promise.allSettled(libraries.slice(offset, offset + 3).map(library => content.loadHomeLibrarySection(config, library.id, force))))
-        }
+        await loadBounded(libraries, 3, async library => {
+          if (!disposed) outcomes.push(...await Promise.allSettled([content.loadHomeLibrarySection(config, library.id, force)]))
+        })
         for (const type of serverFavoriteTypes(server)) {
           const id = serverFavoriteID(type)
           if (visibleHomeMenu.value.some(item => item.id === `${server.id}:${id}`)) {
@@ -851,11 +856,21 @@ async function refresh(force = true) {
         const failure = outcomes.find(outcome => outcome.status === 'rejected')
         if (failure?.status === 'rejected') errors.value[server.id] = failure.reason instanceof Error ? failure.reason.message : String(failure.reason)
       } catch (error) { errors.value[server.id] = error instanceof Error ? error.message : String(error) }
-    }))
+    })])
   } finally {
     refreshing.value = false
     if (refreshQueued && !disposed) { refreshQueued = false; void refresh(true) }
   }
+}
+// Fill a freed slot immediately instead of waiting for the slowest request in a batch.
+async function loadBounded<T>(items: readonly T[], limit: number, load: (item: T) => Promise<void>) {
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (!disposed && next < items.length) {
+      const item = items[next++]
+      await load(item)
+    }
+  }))
 }
 async function addFolder() {
   await showCategory('home')
@@ -907,7 +922,7 @@ watch(() => visibleHomeMenu.value.filter(item => item.id.includes(':server-favor
       </div>
       <div class="group-header"><button class="group-heading" :class="{ selected: isCatalogPage && selectedHomeRowKey === 'catalog:library' }" @click="showCatalog('library')"><Library :size="20" /><span>{{ t('media.library') }}</span></button><button class="group-toggle" :aria-expanded="expanded.library" :aria-label="t('unified.expandGroup', { name: t('media.library') })" @click="expanded.library = !expanded.library"><ChevronDown :size="14" /></button></div>
       <div v-show="expanded.library && !homePreferences.hidden.includes('library')" class="nav-children">
-        <button v-for="item in libraryShortcutCards" :key="item.key" :class="{ selected: selectedHomeRowKey === 'catalog:' + item.key && isCatalogPage || item.key === 'music' && section === 'music' || item.key === 'books' && section === 'book' }" @click="item.action()"><Folder :size="18" /><span>{{ item.title }}</span></button>
+        <button v-for="item in libraryShortcutCards" :key="item.key" :class="{ selected: selectedHomeRowKey === 'catalog:' + item.key && isCatalogPage || item.key === 'music' && section === 'music' || item.key === 'books' && section === 'book' }" :data-testid="item.key === 'music' ? 'unified-nav-music' : item.key === 'books' ? 'unified-nav-book' : undefined" @click="item.action()"><Folder :size="18" /><span>{{ item.title }}</span></button>
 
       </div>
       <div class="group-header"><button class="group-heading" :class="{ selected: section === 'files' }" @click="app.mediaLibrarySection = 'files'"><Folder :size="20" /><span>{{ t('unified.files') }}</span></button><button class="group-toggle" :aria-expanded="expanded.files" :aria-label="t('unified.expandGroup', { name: t('unified.files') })" @click="expanded.files = !expanded.files"><ChevronDown :size="14" /></button></div>
@@ -1163,6 +1178,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .unified-pane{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}.unified-toolbar{height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid var(--color-border-2)}
 .unified-toolbar h1{font-size:15px;font-weight:600;margin:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.unified-toolbar{gap:12px}.round-button{display:grid;place-items:center;border:1px solid var(--color-border-2);background:var(--color-fill-1);border-radius:50%;width:36px;height:36px;flex-shrink:0}.round-button:disabled{cursor:wait;opacity:.6}.add-source{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:20px;padding:10px 16px;background:#ff8b25;color:#fff}button:focus-visible{outline:2px solid #ff8b25;outline-offset:2px}
 .unified-home{flex:1;overflow-y:auto;padding:24px 28px}.home-row{margin-bottom:26px}h2{font-size:19px;font-weight:600;margin:0 0 14px}
+:global(body #xbybody .unified-library .music-pane > .unified-toolbar) { background:#fafbfc!important; color:#20242c; border-bottom-color:#e9ecf0; }
+:global(body[arco-theme='dark'] #xbybody .unified-library .music-pane > .unified-toolbar) { background:#181c1f!important; color:#edf0f2; border-bottom-color:#292e33; }
 :global(body[arco-theme='dark'] #xbybody .unified-library .unified-home:not(.category-collection)){background:#1e1e1e!important}
 :global(body[arco-theme='dark'] .search-pane){background:#1e1e1e}.search-pane .unified-toolbar{border-bottom:0}.search-pane .sidebar-search-results{padding-top:0}
 .sidebar-search-results{height:100%;min-height:0}.search-result-group{margin:0 12px 32px}.search-result-group>h2{font-size:22px;margin:0 0 14px}.search-scopes{max-width:60%;overflow-x:auto;white-space:nowrap}.search-clear{padding:0!important;min-width:20px}.search-result-group :deep(.mode-grid .horizontal-row){grid-template-columns:repeat(8,minmax(0,1fr));gap:22px 20px}@media(max-width:1400px){.search-result-group :deep(.mode-grid .horizontal-row){grid-template-columns:repeat(6,minmax(0,1fr))}}@media(max-width:1050px){.search-result-group :deep(.mode-grid .horizontal-row){grid-template-columns:repeat(4,minmax(0,1fr))}}

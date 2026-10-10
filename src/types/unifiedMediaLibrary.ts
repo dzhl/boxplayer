@@ -21,5 +21,7 @@ export interface UnifiedLibraryRow {
   cards: UnifiedLibraryCard[]
   landscape?: boolean
   grouped?: boolean
+  loading?: boolean
+  error?: string
   more: () => void
 }

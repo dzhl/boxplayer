@@ -30,6 +30,8 @@ const failedImages = ref(new Set<string>())
       <h2>{{ row.title }}</h2>
       <button @click="row.more">{{ t('mediaServer.seeAllPlain') }}</button>
     </div>
+    <div v-if="row.loading && !row.cards.length" role="status" class="shelf-status"><a-spin /> {{ t('common.loading') }}</div>
+    <div v-else-if="row.error && !row.cards.length" role="status" class="shelf-status">{{ row.error }}</div>
     <div class="horizontal-row">
       <div v-for="card in row.cards" :key="card.key" class="media-card" role="button" tabindex="0" :class="{ landscape: row.landscape, grouped: row.grouped }" @keydown.enter.self.prevent="clickCard(card)" @keydown.space.self.prevent="clickCard(card)" @click="clickCard(card)" @dblclick.stop="openMenu($event, card)" @contextmenu="openMenu($event, card)">
         <div class="artwork">
@@ -68,6 +70,7 @@ const failedImages = ref(new Set<string>())
 .home-row { margin-bottom: 26px; }
 .resume-play { position: absolute; inset: 0; margin: auto; width: 52px; height: 52px; border: 3px solid white; border-radius: 50%; display: grid; place-items: center; padding-left: 3px; box-sizing: border-box; color: white; font-size: 26px; background: #0002; filter: drop-shadow(0 2px 4px #0008); pointer-events: none; }
 .row-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; }
+.shelf-status { min-height: 165px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--color-text-3); }
 h2 { font-size: 19px; font-weight: 600; margin: 0; }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid #ff8b25; outline-offset: 2px; }

@@ -1,5 +1,5 @@
 <script setup lang='ts'>
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   KeyboardState,
   useAppStore,
@@ -49,6 +49,7 @@ const Down = defineAsyncComponent(() => import('../down/index.vue'))
 const UnifiedMediaLibraryView = defineAsyncComponent({ loader: () => import('../views/UnifiedMediaLibraryView.vue'), loadingComponent: MediaLibraryLoading, delay: 0 })
 const PageGlobalSearch = defineAsyncComponent(() => import('./PageGlobalSearch.vue'))
 const PageAIWorkspace = defineAsyncComponent(() => import('./PageAIWorkspace.vue'))
+const LibraryMusicPlayer = defineAsyncComponent(() => import('./PageMusic.vue'))
 
 const wechatPayImage = 'images/wechat_pay.jpg'
 const alipayImage = 'images/alipay.jpg'
@@ -81,6 +82,24 @@ let lastShareClipboardSignature = ''
 let shareClipboardPromptOpen = false
 const musicStore = useMusicLibraryStore()
 const musicPlayerStore = useMusicPlayerStore()
+const musicViewBounds = ref<Record<string, string>>({})
+let musicViewObserver: ResizeObserver | undefined
+const musicNowPlayingVisible = computed(() => musicPlayerStore.panelVisible && appStore.appTab === 'media' && appStore.mediaLibrarySection === 'music')
+function updateMusicViewBounds() {
+  const pane = document.querySelector('.music-pane')
+  if (!pane) return
+  const rect = pane.getBoundingClientRect()
+  musicViewBounds.value = { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` }
+}
+watch(musicNowPlayingVisible, async (visible) => {
+  musicViewObserver?.disconnect()
+  document.querySelector('.music-pane')?.toggleAttribute('inert', visible)
+  if (!visible) return
+  await nextTick()
+  updateMusicViewBounds()
+  const pane = document.querySelector('.music-pane')
+  if (pane) { musicViewObserver = new ResizeObserver(updateMusicViewBounds); musicViewObserver.observe(pane) }
+})
 const bookStore = useBookLibraryStore()
 const mediaStore = useMediaLibraryStore()
 
@@ -322,6 +341,12 @@ const onResize = throttle(() => {
 }, 50)
 
 const onKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && musicNowPlayingVisible.value) {
+    musicPlayerStore.hidePanel()
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
   const ele = (event.srcElement || event.target) as any
   const nodeName = ele && ele.nodeName
   if (event.key === 'Tab') {
@@ -365,26 +390,6 @@ const handleAsyncDelete = (key: string) => {
 }
 const handleAudioStop = () => {
   footStore.mSaveAudioUrl('')
-}
-
-const formatFooterMusicTime = (sec: number): string => {
-  if (!isFinite(sec) || sec < 0) sec = 0
-  const total = Math.floor(sec)
-  const m = Math.floor(total / 60)
-  const s = total % 60
-  return `${m}:${String(s).padStart(2, '0')}`
-}
-
-const handleFooterMusicToggle = () => {
-  musicPlayerStore.sendCommand('toggle')
-}
-
-const handleFooterMusicPrev = () => {
-  musicPlayerStore.sendCommand('prev')
-}
-
-const handleFooterMusicNext = () => {
-  musicPlayerStore.sendCommand('next')
 }
 
 const handleMineradioFilesDropped = (files: File[]) => {
@@ -435,6 +440,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  musicViewObserver?.disconnect()
+  document.querySelector('.music-pane')?.removeAttribute('inert')
   window.clearTimeout(shareClipboardTimer)
   window.clearInterval(pricingPollTimer)
   window.removeEventListener('resize', onResize)
@@ -492,6 +499,10 @@ onUnmounted(() => {
       </div>
     </a-layout-header>
     <a-layout-content id='xbybody'>
+      <div v-if="musicPlayerStore.pendingLoad" v-show="musicNowPlayingVisible" :style="musicViewBounds" class="library-music-player-panel" role="region" aria-label="正在播放">
+        <button class="library-music-player-close" @click="musicPlayerStore.hidePanel()">返回音乐库</button>
+        <LibraryMusicPlayer side-panel embedded full-page @state-change="musicPlayerStore.updateState" />
+      </div>
       <a-tabs type='text' :direction="'horizontal'" class='hidetabs' :justify='true' :active-key='appStore.appTab' lazy-load>
         <a-tab-pane key='pan' title='1'>
           <Pan :visible='panVisible' />
@@ -535,38 +546,6 @@ onUnmounted(() => {
         </div>
         <div class='footinfo'>
           {{ footStore.GetSpaceInfo }}
-        </div>
-        <div
-          v-if="musicPlayerStore.state.hasTrack"
-          class='footer-music-player'
-          :title="musicPlayerStore.state.title || t('music.player')"
-        >
-          <div class='footer-music-cover' @click='musicPlayerStore.togglePanel()'>
-            <img v-if='musicPlayerStore.state.coverUrl' :src='musicPlayerStore.state.coverUrl' alt='' />
-            <Music v-else :size='14' :stroke-width='1.8' />
-          </div>
-          <div class='footer-music-meta' @click='musicPlayerStore.togglePanel()'>
-            <div class='footer-music-title'>{{ musicPlayerStore.state.title || t('music.player') }}</div>
-            <div class='footer-music-bar'>
-              <div class='footer-music-bar-fill' :style="{ width: musicPlayerStore.state.progressPercent + '%' }"></div>
-            </div>
-          </div>
-          <span class='footer-music-time'>
-            {{ formatFooterMusicTime(musicPlayerStore.state.currentTime) }}
-          </span>
-          <button class='footer-music-btn' :title="t('music.previousTrack')" @click.stop='handleFooterMusicPrev'>
-            <SkipBack :size='13' :stroke-width='2' />
-          </button>
-          <button class='footer-music-btn primary' :title="musicPlayerStore.state.isPlaying ? t('music.pause') : t('music.play')" @click.stop='handleFooterMusicToggle'>
-            <Pause v-if='musicPlayerStore.state.isPlaying' :size='13' :stroke-width='2' :fill="'currentColor'" />
-            <Play v-else :size='13' :stroke-width='2' :fill="'currentColor'" />
-          </button>
-          <button class='footer-music-btn' :title="t('music.nextTrack')" @click.stop='handleFooterMusicNext'>
-            <SkipForward :size='13' :stroke-width='2' />
-          </button>
-          <button class='footer-music-toggle' :title="musicPlayerStore.panelVisible ? t('music.collapse') : t('music.expand')" @click.stop='musicPlayerStore.togglePanel()'>
-            {{ musicPlayerStore.panelVisible ? t('music.collapse') : t('music.expand') }}
-          </button>
         </div>
         <div
           v-if="musicStore.isScanning && appStore.appTab !== 'music'"
@@ -743,6 +722,8 @@ onUnmounted(() => {
   </template>
 
 <style>
+.library-music-player-panel { position:fixed; z-index:100; background:var(--color-bg-1); overflow:hidden; }
+.library-music-player-close { position:absolute; top:16px; left:20px; z-index:100; padding:9px 16px; border:1px solid #ffffff40; border-radius:20px; background:#171b20d9; color:white; cursor:pointer; }
 body {
   --app-type-caption: 12px;
   --app-type-control: 13px;

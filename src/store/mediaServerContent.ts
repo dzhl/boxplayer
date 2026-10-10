@@ -226,12 +226,15 @@ const useMediaServerContentStore = defineStore('media-server-content', {
       try {
         const shell = await getMediaServerHomeShell(config)
         const excluded = new Set(this.excludedLibraryIds[config.id] || [])
+        const previous = this.homeData[config.id]
         this.homeData[config.id] = {
           ...emptyHomeData(),
+          ...previous,
           ...shell,
-          libraries: excluded.size > 0
-            ? shell.libraries.filter((library) => !excluded.has(library.id)).map((library) => ({ ...library, attempted: false }))
-            : shell.libraries.map((library) => ({ ...library, attempted: false }))
+          libraries: shell.libraries.filter((library) => !excluded.has(library.id)).map((library) => {
+            const cached = previous?.libraries.find((item) => item.id === library.id)
+            return { ...library, items: cached?.items ?? library.items, total: cached?.total ?? library.total, attempted: false }
+          })
         }
         return this.homeData[config.id]
       } catch (error: any) {

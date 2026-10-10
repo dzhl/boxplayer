@@ -12,6 +12,7 @@ import type { TextChunk } from './bookAI'
 import { mediaDriveFileKey, reconcileMediaItemSource } from './mediaSourceMembership'
 import { mediaPersistenceSnapshot } from './mediaPersistenceSnapshot'
 import { associateScrapedFiles, mergeScrapedMedia } from './mediaScrapeMerge'
+import { shouldEnrichMusic, musicCohortKey } from './musicCatalog'
 
 type AIConversationRecord = AIConversation
 type AIMessageRecord = AIMessage
@@ -652,10 +653,10 @@ class XBYDB3 extends Dexie {
 
   async getMusicEnrichmentCandidates(limit: number, staleBefore: number, excludedIds: Set<string> = new Set()): Promise<IMusicTrack[]> {
     if (!this.isOpen()) await this.open().catch(() => {})
-    return this.imusic_track
-      .filter(track => !excludedIds.has(track.id) && !track.cover_url && (!track.enriched_at || track.enriched_at < staleBefore))
-      .limit(limit)
-      .toArray()
+    const candidates = await this.imusic_track.filter(track => !excludedIds.has(track.id) && shouldEnrichMusic(track, staleBefore + 24 * 60 * 60 * 1000)).toArray()
+    // Never split a semantic cohort at a UI-page boundary (including its final pair).
+    const keys = new Set(candidates.slice(0, limit).map(musicCohortKey))
+    return candidates.filter(track => keys.has(musicCohortKey(track)))
   }
 
   async getMusicTracksByDrive(user_id: string, drive_id: string): Promise<IMusicTrack[]> {

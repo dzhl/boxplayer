@@ -23,10 +23,14 @@ import { getMediaServerMusicTracks } from '../media-server/contentGateway'
 import type { MediaServerMusicTrack } from '../types/mediaServerContent'
 import { t as tt } from '../i18n'
 import useSettingStore from '../setting/settingstore'
+import MusicLibraryBrowser from './music/MusicLibraryBrowser.vue'
+import useMusicPlayerStore from '../store/musicplayerstore'
 
 withDefaults(defineProps<{ sidebarVisible?: boolean }>(), { sidebarVisible: true })
 
 const musicStore = useMusicLibraryStore()
+const musicPlayerStore = useMusicPlayerStore()
+const showSources = ref(false)
 const settingStore = useSettingStore()
 const appStore = useAppStore()
 const mediaServerRegistry = useMediaServerRegistryStore()
@@ -200,7 +204,8 @@ function playFromList(list: IMusicTrack[], target: IMusicTrack) {
     password: '',
     playlist
   }
-  window.WebOpenWindow({ page: 'PageMusic', data: pageMusic, theme: musicWindowTheme.value })
+  musicPlayerStore.loadMusic(pageMusic)
+  musicPlayerStore.showPanel()
 }
 
 function playMediaServerList(list: MediaServerMusicTrack[], target: MediaServerMusicTrack) {
@@ -228,7 +233,8 @@ function playPageTracks(tracks: IPageMusicTrack[], target: IPageMusicTrack = tra
     password: '',
     playlist
   }
-  window.WebOpenWindow({ page: 'PageMusic', data: pageMusic, theme: musicWindowTheme.value })
+  musicPlayerStore.loadMusic(pageMusic)
+  musicPlayerStore.showPanel()
 }
 
 function shuffleTracks<T>(items: T[]): T[] {
@@ -722,7 +728,9 @@ defineExpose({ playFromList, selectTab })
 
 <template>
   <div class="aml">
-    <div class="aml-main-row">
+    <MusicLibraryBrowser v-if="!showSources" :tracks="musicStore.tracks" :total="musicStore.totalCount" :loading="musicStore.isLoadingPage" :has-more="musicStore.hasMoreTracks" @load-all="musicStore.loadAllTracks()" @load-more="loadMoreTracks" @play="playPageTracks" @sources="showSources = true" />
+    <button v-if="showSources" class="music-source-back" @click="showSources = false"><ArrowLeft :size="18" /> 返回音乐</button>
+    <div v-if="showSources" class="aml-main-row">
       <MusicLibraryRail
         v-show="sidebarVisible"
         v-model:selected-scan-user-ids="selectedScanUserIds"
@@ -1115,6 +1123,7 @@ defineExpose({ playFromList, selectTab })
 </template>
 
 <style scoped>
+.music-source-back { display:flex; align-items:center; gap:8px; color:var(--color-text-1); background:var(--color-bg-1); border:0; padding:10px 20px; cursor:pointer; }
 /* ===== Mineradio Music Library ===== */
 
 .aml {

@@ -3172,4 +3172,29 @@ body:not([arco-theme='dark']) .playlist-modal.detail-media-modal .arco-modal-tit
 body:not([arco-theme='dark']) .playlist-modal.detail-media-modal .arco-modal-close-btn {
   color: rgba(17, 24, 39, 0.94) !important;
 }
+/* The cinematic rules above are dark defaults; light mode needs its own surface
+   and foregrounds, including the artwork fade into the content below. */
+body:not([arco-theme='dark']) #xbybody .media-detail {
+  --scraped-detail-surface: #fafafa;
+  --scraped-detail-soft: #eceef1;
+  --scraped-detail-copy: #22252b;
+  --scraped-detail-muted: #69717d;
+}
+body:not([arco-theme='dark']) #xbybody .media-detail {
+  .detail-header { background:var(--scraped-detail-surface); border-color:#e4e6e9; }
+  .detail-back:hover { color:var(--scraped-detail-copy); }
+  .detail-back > .iconfont-svg { background:#f0f1f3; border-color:#daddE2; }
+  .hero-section { background-color:#eceef1!important; }
+  .hero-section::before { background:linear-gradient(180deg, transparent 30%, rgba(250,250,250,.25) 58%, rgba(250,250,250,.96) 85%, #fafafa 100%)!important; }
+  .hero-section::after { background:linear-gradient(180deg, transparent, #fafafa)!important; }
+  .hero-title,.hero-brand-title,.hero-overview,.meta-rating { color:var(--scraped-detail-copy)!important; text-shadow:none!important; }
+  .hero-meta-secondary span + span::before { color:#858b94!important; }
+  .episode-title,.cast-name,.detail-media-card-title,.detail-media-row strong { color:var(--scraped-detail-copy)!important; }
+  .episode-name,.cast-role,.detail-file-bar,.detail-file-name,.detail-file-meta,.detail-media-row span { color:var(--scraped-detail-muted)!important; }
+  .cast-avatar,.episode-thumbnail,.detail-media-kind-badge { background:#eceef1; color:#69717d; }
+  .tag-item,.season-tab { background:#f0f1f3; color:#424852; border-color:#dfe2e6; }
+  .detail-media-card { background:#f1f2f4; border-color:#dfe2e6; }
+  .detail-media-card.selected { background:#edf1ff; border-color:#a5b8f5; }
+  .action-button,.play-dropdown-button { background:rgba(240,241,243,.9); color:#333942; border-color:#cdd1d7; }
+}
 </style>
