@@ -2,16 +2,16 @@
 
 # BoxPlayer
 
-<p align="center">把网盘、媒体服务器、音乐、阅读与 AI 放进同一个桌面工作台。</p>
+<p align="center">跨手机、平板、电视与电脑的全平台播放器：把网盘、媒体服务器、音乐、阅读与 AI 放进同一个入口。</p>
 
 <p align="center">
   中文 · <a href="./README.en.md">English</a> ·
-  <a href="https://xbyvideohub.com/">官网</a> ·
-  <a href="https://github.com/gaozhangmin/boxplayer/releases">下载桌面版</a> ·
+  <a href="https://xbyvideohub.com/">官网及全平台下载</a> ·
+  <a href="https://github.com/gaozhangmin/boxplayer/releases">桌面版 Releases</a> ·
   <a href="./clouddrive-cli/README.md">CLI / MCP</a>
 </p>
 
-BoxPlayer 是面向个人媒体资产的开源桌面 App。它把多个云盘、本地文件和 Jellyfin / Emby / Plex 内容放在统一入口中，支持文件管理、媒体刮削与播放、音乐库、电子书阅读及 AI 辅助操作。Electron 桌面版支持 macOS、Windows 和 Linux。
+BoxPlayer 是面向个人媒体资产的全平台播放器，支持 Apple 全家桶（iPhone、iPad、Mac、Apple TV）、Windows、Linux、Android 手机与平板，以及 Android TV。它把多个云盘、本地文件和 Jellyfin / Emby / Plex 内容放在统一入口中，支持文件管理、媒体刮削与播放、音乐库、电子书阅读及 AI 辅助操作。本仓库主要维护 Electron 桌面版；各平台客户端的界面、功能与发布节奏可能不同。
 
 > 第一次使用？前往 [安装](#安装)，添加云盘或媒体服务器，然后在媒体库扫描内容。版本变更与已知限制见 [v5.0.36 更新说明](docs/releases/v5.0.36.md)。
 
@@ -82,9 +82,15 @@ BoxPlayer 是面向个人媒体资产的开源桌面 App。它把多个云盘、
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/gaozhangmin/boxplayer/releases) 下载适合 macOS、Windows 或 Linux 的桌面安装包。请以 Release 页面实际列出的文件与架构为准；草稿 Release 尚不能作为公开下载版本。
+**官网：[xbyvideohub.com](https://xbyvideohub.com/)**，在「全部下载」中选择设备对应的版本：
 
-另有独立的 [Apple 平台 App Store 版本](https://apps.apple.com/us/app/boxplayer/id6739804060)。其界面和发布节奏可能与本仓库的 Electron 桌面版不同。
+| 设备 | 下载入口 |
+|---|---|
+| iPhone、iPad、Mac、Apple TV | [BoxPlayer App Store](https://apps.apple.com/us/app/boxplayer/id6739804060) |
+| Android 手机、平板、Android TV | [官网 Android APK 下载](https://xbyvideohub.com/) |
+| macOS、Windows、Linux 桌面版 | [官网下载安装包](https://xbyvideohub.com/) · [GitHub Releases](https://github.com/gaozhangmin/boxplayer/releases) |
+
+请以下载页面实际列出的文件和架构为准；GitHub 草稿 Release 尚不能作为公开下载版本。Apple 平台 App Store 版与本仓库的 Electron 桌面版是不同客户端。
 
 macOS 如遇系统安全提示，请先确认下载来源，再通过系统设置允许打开；不要对来源不明的安装包解除隔离。
 
